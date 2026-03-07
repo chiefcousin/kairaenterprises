@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { HeroBanner } from "@/components/storefront/hero-banner";
 import { ProductGrid } from "@/components/storefront/product-grid";
+import { QuickFilters } from "@/components/storefront/quick-filters";
 import { getStoreSettings } from "@/lib/store-settings";
 import Link from "next/link";
 import Image from "next/image";
@@ -68,6 +69,16 @@ export default async function HomePage() {
             ))}
           </div>
         </section>
+      )}
+
+      {/* Browse Toys — quick filter chips */}
+      {categories && categories.length > 0 && (
+        <QuickFilters
+          categories={(categories as Category[]).map((c) => ({
+            name: c.name,
+            slug: c.slug,
+          }))}
+        />
       )}
 
       {/* Featured Products */}

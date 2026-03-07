@@ -37,6 +37,7 @@ export function SignupPopup() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save details");
       localStorage.setItem(STORAGE_KEY, "1");
+      localStorage.setItem("ka_customer_phone", phone);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");

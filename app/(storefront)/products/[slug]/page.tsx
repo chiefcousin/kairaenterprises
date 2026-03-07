@@ -10,6 +10,7 @@ import { ViewTracker } from "@/components/storefront/view-tracker";
 import { ProductJsonLd } from "@/components/storefront/product-jsonld";
 import { ShareButton } from "@/components/storefront/share-button";
 import { MobileWhatsAppBar } from "@/components/storefront/mobile-whatsapp-bar";
+import { ProductReviews } from "@/components/storefront/product-reviews";
 import type { Metadata } from "next";
 import type { ProductWithImages, ProductWithPrimaryImage } from "@/lib/types";
 import Link from "next/link";
@@ -187,6 +188,9 @@ export default async function ProductDetailPage({
           </div>
         </div>
       </div>
+
+      {/* Reviews & Ratings */}
+      <ProductReviews productId={typedProduct.id} />
 
       {/* Related Products */}
       {related && related.length > 0 && (

@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { storeInitialTokens } from "@/lib/zoho/client";
-
-const ZOHO_TOKEN_URL = "https://accounts.zoho.com/oauth/v2/token";
+import { getZohoConfig, storeInitialTokens } from "@/lib/zoho/client";
 
 /**
  * GET /api/zoho/callback
@@ -24,15 +22,22 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const config = await getZohoConfig();
+    if (!config) {
+      throw new Error("Zoho credentials not found in settings");
+    }
+
+    const tokenUrl = `https://accounts.zoho.${config.domain}/oauth/v2/token`;
+
     const params = new URLSearchParams({
       grant_type: "authorization_code",
-      client_id: process.env.ZOHO_CLIENT_ID!,
-      client_secret: process.env.ZOHO_CLIENT_SECRET!,
-      redirect_uri: process.env.ZOHO_REDIRECT_URI!,
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      redirect_uri: config.redirectUri,
       code,
     });
 
-    const res = await fetch(`${ZOHO_TOKEN_URL}?${params.toString()}`, {
+    const res = await fetch(`${tokenUrl}?${params.toString()}`, {
       method: "POST",
     });
 

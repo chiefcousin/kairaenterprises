@@ -1,4 +1,5 @@
 import { AdminSidebar } from "@/components/admin/sidebar";
+import { RoleProvider } from "@/components/admin/role-context";
 
 export const dynamic = "force-dynamic";
 
@@ -8,9 +9,11 @@ export default function AdminDashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen">
-      <AdminSidebar />
-      <main className="flex-1 overflow-auto bg-muted/30 p-6">{children}</main>
-    </div>
+    <RoleProvider>
+      <div className="flex min-h-screen">
+        <AdminSidebar />
+        <main className="flex-1 overflow-auto bg-muted/30 p-6">{children}</main>
+      </div>
+    </RoleProvider>
   );
 }

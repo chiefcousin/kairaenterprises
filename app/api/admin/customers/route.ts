@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  getUserRole,
+  canViewCustomers,
+  canAddCustomers,
+  canDeleteCustomers,
+} from "@/lib/roles";
 
-async function verifyAdmin() {
+async function getCallerInfo() {
   const supabase = createClient();
   const {
     data: { user },
@@ -10,26 +16,18 @@ async function verifyAdmin() {
 
   if (!user) return null;
 
-  const adminClient = createAdminClient();
-  const { data: callerRole } = await adminClient
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  // No role row = admin; explicit admin role = admin
-  if (callerRole && callerRole.role !== "admin") return null;
-
-  return adminClient;
+  const role = await getUserRole(user.id);
+  return { user, role };
 }
 
 // GET: List all customers
 export async function GET() {
-  const adminClient = await verifyAdmin();
-  if (!adminClient) {
+  const caller = await getCallerInfo();
+  if (!caller || !canViewCustomers(caller.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const adminClient = createAdminClient();
   const { data, error } = await adminClient
     .from("customers")
     .select("*")
@@ -39,13 +37,13 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ customers: data });
+  return NextResponse.json({ customers: data, callerRole: caller.role });
 }
 
 // POST: Add a new customer
 export async function POST(request: NextRequest) {
-  const adminClient = await verifyAdmin();
-  if (!adminClient) {
+  const caller = await getCallerInfo();
+  if (!caller || !canAddCustomers(caller.role)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -65,6 +63,7 @@ export async function POST(request: NextRequest) {
   }
 
   const cleanPhone = phone.trim().replace(/\s+/g, "");
+  const adminClient = createAdminClient();
 
   const { error } = await adminClient.from("customers").upsert(
     {
@@ -83,11 +82,14 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-// DELETE: Remove a customer by id
+// DELETE: Remove a customer by id (admin only)
 export async function DELETE(request: NextRequest) {
-  const adminClient = await verifyAdmin();
-  if (!adminClient) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const caller = await getCallerInfo();
+  if (!caller || !canDeleteCustomers(caller.role)) {
+    return NextResponse.json(
+      { error: "Only admins can delete customers" },
+      { status: 403 }
+    );
   }
 
   const body = await request.json().catch(() => null);
@@ -97,6 +99,7 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
+  const adminClient = createAdminClient();
   const { error } = await adminClient
     .from("customers")
     .delete()

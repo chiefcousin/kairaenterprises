@@ -27,10 +27,14 @@ import {
   MapPin,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/components/admin/role-context";
 import type { Customer } from "@/lib/types";
 
 export default function CustomersPage() {
   const { toast } = useToast();
+  const myRole = useUserRole();
+  const canDelete = myRole === "admin";
+  const canAdd = myRole === "admin" || myRole === "partner";
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -153,10 +157,12 @@ export default function CustomersPage() {
             {customers.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Add Customer
-        </Button>
+        {canAdd && (
+          <Button onClick={() => setShowAddDialog(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Add Customer
+          </Button>
+        )}
       </div>
 
       {/* Search */}
@@ -238,19 +244,21 @@ export default function CustomersPage() {
                         <MessageCircle className="h-4 w-4" />
                       </a>
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => handleRemove(customer)}
-                      disabled={removingId === customer.id}
-                    >
-                      {removingId === customer.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </Button>
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleRemove(customer)}
+                        disabled={removingId === customer.id}
+                      >
+                        {removingId === customer.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}

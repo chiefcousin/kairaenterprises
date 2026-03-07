@@ -1,25 +1,59 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 
 interface ZohoSettingsProps {
+  isConfigured: boolean;
   isConnected: boolean;
   lastSyncAt: string | null;
   syncStatus: string;
   syncError: string | null;
   webhookToken: string;
   baseUrl: string;
+  config: {
+    client_id: string;
+    client_secret: string;
+    redirect_uri: string;
+    org_id: string;
+    domain: string;
+  };
 }
 
+const ZOHO_REGIONS = [
+  { value: "in", label: "India (.in)" },
+  { value: "com", label: "United States (.com)" },
+  { value: "eu", label: "Europe (.eu)" },
+  { value: "com.au", label: "Australia (.com.au)" },
+  { value: "jp", label: "Japan (.jp)" },
+  { value: "com.cn", label: "China (.com.cn)" },
+];
+
 export function ZohoSettings({
+  isConfigured,
   isConnected,
   lastSyncAt,
   syncError: initialSyncError,
   webhookToken,
   baseUrl,
+  config: initialConfig,
 }: ZohoSettingsProps) {
+  const router = useRouter();
+  const [showSetup, setShowSetup] = useState(!isConfigured);
+  const [saving, setSaving] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
   const [syncResult, setSyncResult] = useState<{
     total: number;
     created: number;
@@ -28,8 +62,57 @@ export function ZohoSettings({
   } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(initialSyncError);
   const [copied, setCopied] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+
+  const [formData, setFormData] = useState({
+    client_id: initialConfig.client_id,
+    client_secret: initialConfig.client_secret,
+    redirect_uri: initialConfig.redirect_uri || `${baseUrl}/api/zoho/callback`,
+    org_id: initialConfig.org_id,
+    domain: initialConfig.domain || "in",
+  });
 
   const webhookUrl = `${baseUrl}/api/zoho/webhook?token=${webhookToken}`;
+
+  async function handleSaveConfig(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setSaveMessage(null);
+
+    try {
+      const res = await fetch("/api/integrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ platform: "zoho", config: formData }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Failed to save");
+      setSaveMessage("Credentials saved! You can now connect to Zoho.");
+      setShowSetup(false);
+      router.refresh();
+    } catch (err) {
+      setSaveMessage(
+        err instanceof Error ? err.message : "Failed to save credentials"
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    if (!confirm("Remove Zoho integration? This will delete all credentials and disconnect Zoho.")) {
+      return;
+    }
+    setDisconnecting(true);
+    try {
+      await fetch("/api/integrations?platform=zoho", { method: "DELETE" });
+      router.refresh();
+    } catch {
+      alert("Failed to disconnect. Please try again.");
+    } finally {
+      setDisconnecting(false);
+    }
+  }
 
   async function handleSync() {
     setIsSyncing(true);
@@ -57,6 +140,119 @@ export function ZohoSettings({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  // ---- Setup form (shown when not configured or when editing) ----
+  if (showSetup) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Enter your Zoho API credentials. Create a Server-based Application at{" "}
+          <strong>api-console.zoho.com</strong> and set the redirect URI to:{" "}
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+            {baseUrl}/api/zoho/callback
+          </code>
+        </p>
+
+        <form onSubmit={handleSaveConfig} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="zoho_domain">Zoho Region</Label>
+            <Select
+              value={formData.domain}
+              onValueChange={(v) => setFormData({ ...formData, domain: v })}
+            >
+              <SelectTrigger id="zoho_domain">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ZOHO_REGIONS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="zoho_client_id">Client ID</Label>
+            <Input
+              id="zoho_client_id"
+              value={formData.client_id}
+              onChange={(e) =>
+                setFormData({ ...formData, client_id: e.target.value })
+              }
+              placeholder="1000.XXXXXXXXXXXXXXXX"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="zoho_client_secret">Client Secret</Label>
+            <Input
+              id="zoho_client_secret"
+              type="password"
+              value={formData.client_secret}
+              onChange={(e) =>
+                setFormData({ ...formData, client_secret: e.target.value })
+              }
+              placeholder="xxxxxxxxxxxxxxxxxxxxxxxx"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="zoho_org_id">Organization ID</Label>
+            <Input
+              id="zoho_org_id"
+              value={formData.org_id}
+              onChange={(e) =>
+                setFormData({ ...formData, org_id: e.target.value })
+              }
+              placeholder="Find in Zoho Inventory → Settings → Organization Profile"
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="zoho_redirect_uri">Redirect URI</Label>
+            <Input
+              id="zoho_redirect_uri"
+              value={formData.redirect_uri}
+              onChange={(e) =>
+                setFormData({ ...formData, redirect_uri: e.target.value })
+              }
+              placeholder={`${baseUrl}/api/zoho/callback`}
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              Must match the redirect URI in your Zoho API Console app.
+            </p>
+          </div>
+
+          {saveMessage && (
+            <p className="text-sm text-muted-foreground">{saveMessage}</p>
+          )}
+
+          <div className="flex gap-2">
+            <Button type="submit" disabled={saving}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Save Credentials
+            </Button>
+            {isConfigured && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowSetup(false)}
+              >
+                Cancel
+              </Button>
+            )}
+          </div>
+        </form>
+      </div>
+    );
+  }
+
+  // ---- Connected / configured view ----
   return (
     <div className="space-y-5">
       {/* Connection status */}
@@ -64,19 +260,47 @@ export function ZohoSettings({
         <div className="flex items-center gap-2">
           <span
             className={`inline-block h-2.5 w-2.5 rounded-full ${
-              isConnected ? "bg-green-500" : "bg-red-400"
+              isConnected ? "bg-green-500" : "bg-yellow-400"
             }`}
           />
           <span className="text-sm font-medium">
-            {isConnected ? "Connected to Zoho Inventory" : "Not connected"}
+            {isConnected
+              ? "Connected to Zoho Inventory"
+              : "Credentials saved — not yet connected"}
           </span>
         </div>
 
-        <Button variant="outline" size="sm" asChild>
-          <a href="/api/zoho/auth">
-            {isConnected ? "Reconnect" : "Connect Zoho"}
-          </a>
-        </Button>
+        <div className="flex gap-2">
+          {!isConnected && (
+            <Button variant="default" size="sm" asChild>
+              <a href="/api/zoho/auth">Connect Zoho</a>
+            </Button>
+          )}
+          {isConnected && (
+            <Button variant="outline" size="sm" asChild>
+              <a href="/api/zoho/auth">Reconnect</a>
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSetup(true)}
+          >
+            Edit Credentials
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleDisconnect}
+            disabled={disconnecting}
+          >
+            {disconnecting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              "Remove"
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Sync controls — only when connected */}
@@ -153,8 +377,8 @@ export function ZohoSettings({
           <div className="border-t pt-4">
             <p className="mb-0.5 text-sm font-medium">Webhook URL</p>
             <p className="mb-2 text-xs text-muted-foreground">
-              Register this in Zoho Inventory → Settings → Webhooks for automatic
-              real-time product updates when items change in Zoho.
+              Register this in Zoho Inventory → Settings → Webhooks for
+              automatic real-time product updates when items change in Zoho.
             </p>
             <div className="flex items-center gap-2">
               <code className="flex-1 overflow-x-auto rounded bg-muted px-3 py-2 text-xs">
@@ -170,19 +394,21 @@ export function ZohoSettings({
           <div className="border-t pt-4 text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground text-sm">How it works</p>
             <p>
-              <strong>Zoho → Kaira Enterprises:</strong> Click &quot;Sync Products from Zoho&quot; to pull item
-              names, descriptions, prices, and stock into your catalog. Set up the
-              webhook for automatic real-time updates.
+              <strong>Zoho → Kaira Enterprises:</strong> Click &quot;Sync
+              Products from Zoho&quot; to pull item names, descriptions, prices,
+              and stock into your catalog. Set up the webhook for automatic
+              real-time updates.
             </p>
             <p>
-              <strong>Kaira Enterprises → Zoho:</strong> When you mark a WhatsApp order as{" "}
-              <strong>Confirmed</strong> in the Orders page, a Sales Order is
-              automatically created in Zoho Inventory, decrementing stock.
+              <strong>Kaira Enterprises → Zoho:</strong> When you mark a
+              WhatsApp order as <strong>Confirmed</strong> in the Orders page, a
+              Sales Order is automatically created in Zoho Inventory,
+              decrementing stock.
             </p>
             <p>
               <strong>Compare At Price:</strong> Add a custom field labeled{" "}
-              <em>Compare At Price</em> to your Zoho items to sync sale prices into
-              Kaira Enterprises.
+              <em>Compare At Price</em> to your Zoho items to sync sale prices
+              into Kaira Enterprises.
             </p>
           </div>
         </>

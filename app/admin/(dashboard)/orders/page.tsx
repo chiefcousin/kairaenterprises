@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/components/admin/role-context";
 import { formatPrice } from "@/lib/whatsapp";
 import { ORDER_STATUSES, type OrderStatus } from "@/lib/constants";
 import type { WhatsAppOrder } from "@/lib/types";
@@ -12,25 +13,9 @@ import type { WhatsAppOrder } from "@/lib/types";
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<WhatsAppOrder[]>([]);
   const [filter, setFilter] = useState<string>("all");
-  const [userRole, setUserRole] = useState<string>("admin");
   const { toast } = useToast();
   const supabase = createClient();
-
-  // Determine user role on mount
-  useEffect(() => {
-    async function fetchRole() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      setUserRole(data?.role || "admin");
-    }
-    fetchRole();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const userRole = useUserRole();
 
   const isReadOnly = userRole === "staff";
   const canEdit = userRole === "admin" || userRole === "partner";

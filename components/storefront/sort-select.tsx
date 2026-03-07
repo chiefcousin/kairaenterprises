@@ -19,10 +19,12 @@ export function SortSelect({ current }: { current: string }) {
       onChange={(e) => handleChange(e.target.value)}
       className="rounded-md border px-3 py-1.5 text-sm"
     >
-      <option value="newest">Newest</option>
+      <option value="newest">Newest Arrivals</option>
+      <option value="bestsellers">Bestsellers</option>
       <option value="price_asc">Price: Low to High</option>
       <option value="price_desc">Price: High to Low</option>
-      <option value="name">Name</option>
+      <option value="discount">Biggest Discount</option>
+      <option value="name">Name: A to Z</option>
     </select>
   );
 }

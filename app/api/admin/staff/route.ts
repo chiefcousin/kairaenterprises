@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getUserRole, canInviteStaff, canRemoveStaff, assignableRoles, type UserRole } from "@/lib/roles";
 
 // POST: Invite a staff member by email and assign a role
 export async function POST(request: NextRequest) {
-  // Verify the caller is an authenticated admin
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -12,25 +12,24 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const adminClient = createAdminClient();
+  const callerRole = await getUserRole(user.id);
 
-  // Check that the caller is an admin (no role row = admin)
-  const { data: callerRole } = await adminClient
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (callerRole && callerRole.role !== "admin") {
+  if (!canInviteStaff(callerRole)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = await request.json();
   const { email, role } = body as { email: string; role: string };
 
-  if (!email || !role || !["partner", "staff"].includes(role)) {
-    return NextResponse.json({ error: "email and role (partner|staff) are required" }, { status: 400 });
+  const allowed = assignableRoles(callerRole);
+  if (!email || !role || !allowed.includes(role as UserRole)) {
+    return NextResponse.json(
+      { error: `email and role (${allowed.join("|")}) are required` },
+      { status: 400 }
+    );
   }
+
+  const adminClient = createAdminClient();
 
   // Invite the user via Supabase Auth (sends an email invite)
   const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email);
@@ -65,16 +64,10 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const adminClient = createAdminClient();
+  const callerRole = await getUserRole(user.id);
 
-  const { data: callerRole } = await adminClient
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  if (callerRole && callerRole.role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!canRemoveStaff(callerRole)) {
+    return NextResponse.json({ error: "Only admins can remove staff" }, { status: 403 });
   }
 
   const body = await request.json();
@@ -83,6 +76,13 @@ export async function DELETE(request: NextRequest) {
   if (!user_id) {
     return NextResponse.json({ error: "user_id is required" }, { status: 400 });
   }
+
+  // Prevent removing yourself
+  if (user_id === user.id) {
+    return NextResponse.json({ error: "Cannot remove yourself" }, { status: 400 });
+  }
+
+  const adminClient = createAdminClient();
 
   const { error } = await adminClient
     .from("user_roles")
@@ -103,6 +103,13 @@ export async function GET() {
 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const callerRole = await getUserRole(user.id);
+
+  // Staff can't see the staff list
+  if (callerRole === "staff") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const adminClient = createAdminClient();
@@ -129,5 +136,5 @@ export async function GET() {
     })
   );
 
-  return NextResponse.json({ staff });
+  return NextResponse.json({ staff, callerRole });
 }

@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/components/admin/role-context";
 import type { Product } from "@/lib/types";
 
 export default function AdminInventoryPage() {
@@ -12,6 +13,8 @@ export default function AdminInventoryPage() {
   const [filter, setFilter] = useState<string>("all");
   const { toast } = useToast();
   const supabase = createClient();
+  const role = useUserRole();
+  const canEdit = role === "admin" || role === "partner";
 
   async function fetchProducts() {
     let query = supabase
@@ -98,15 +101,19 @@ export default function AdminInventoryPage() {
                   {stockBadge(product.stock_quantity)}
                 </td>
                 <td className="px-4 py-3">
-                  <Input
-                    type="number"
-                    min="0"
-                    defaultValue={product.stock_quantity}
-                    className="h-8 w-24"
-                    onBlur={(e) =>
-                      updateStock(product.id, parseInt(e.target.value, 10))
-                    }
-                  />
+                  {canEdit ? (
+                    <Input
+                      type="number"
+                      min="0"
+                      defaultValue={product.stock_quantity}
+                      className="h-8 w-24"
+                      onBlur={(e) =>
+                        updateStock(product.id, parseInt(e.target.value, 10))
+                      }
+                    />
+                  ) : (
+                    <span>{product.stock_quantity}</span>
+                  )}
                 </td>
               </tr>
             ))}

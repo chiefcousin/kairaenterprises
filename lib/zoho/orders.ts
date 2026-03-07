@@ -43,10 +43,10 @@ export async function pushOrderToZoho(order: OrderData): Promise<{
     ],
   };
 
-  // Zoho Inventory API expects the body as JSONString (a Zoho quirk)
+  // zohoFetch handles the JSONString form-encoding automatically
   const res = await zohoFetch("/salesorders", {
     method: "POST",
-    body: JSON.stringify({ JSONString: JSON.stringify(payload) }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {

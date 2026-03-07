@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/select";
 import { UserPlus, Trash2, Users, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/components/admin/role-context";
+import type { UserRole } from "@/lib/roles";
 
 interface StaffMember {
   user_id: string;
@@ -29,8 +31,14 @@ interface StaffMember {
   created_at: string;
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  partner: "Partner — full access except removing users",
+  staff: "Staff — view only",
+};
+
 export default function StaffPage() {
   const { toast } = useToast();
+  const myRole = useUserRole();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
@@ -38,6 +46,12 @@ export default function StaffPage() {
   const [inviteRole, setInviteRole] = useState<"partner" | "staff">("staff");
   const [inviting, setInviting] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+
+  // Roles this user can assign
+  const canAssign: UserRole[] =
+    myRole === "admin" ? ["partner", "staff"] : ["staff"];
+  const canRemove = myRole === "admin";
+  const canInvite = myRole === "admin" || myRole === "partner";
 
   const loadStaff = useCallback(async () => {
     setLoading(true);
@@ -121,10 +135,12 @@ export default function StaffPage() {
             Manage who can access the admin panel.
           </p>
         </div>
-        <Button onClick={() => setShowInviteDialog(true)}>
-          <UserPlus className="mr-2 h-4 w-4" />
-          Invite Staff
-        </Button>
+        {canInvite && (
+          <Button onClick={() => setShowInviteDialog(true)}>
+            <UserPlus className="mr-2 h-4 w-4" />
+            Invite Staff
+          </Button>
+        )}
       </div>
 
       {/* Role legend */}
@@ -133,15 +149,15 @@ export default function StaffPage() {
           <div className="grid gap-3 sm:grid-cols-3 text-sm">
             <div className="flex items-start gap-2">
               <Badge className="bg-purple-100 text-purple-700 shrink-0 mt-0.5">Admin</Badge>
-              <p className="text-muted-foreground">Full access to all admin features including products, settings, and staff management.</p>
+              <p className="text-muted-foreground">Full access to everything including removing users.</p>
             </div>
             <div className="flex items-start gap-2">
               <Badge className="bg-blue-100 text-blue-700 shrink-0 mt-0.5">Partner</Badge>
-              <p className="text-muted-foreground">Can view orders and update their status. Cannot access products, settings, or staff.</p>
+              <p className="text-muted-foreground">Full access to products, orders, customers, and settings. Cannot remove users. Can invite staff.</p>
             </div>
             <div className="flex items-start gap-2">
               <Badge className="bg-gray-100 text-gray-700 shrink-0 mt-0.5">Staff</Badge>
-              <p className="text-muted-foreground">View-only access to orders. Cannot change order status or access other sections.</p>
+              <p className="text-muted-foreground">View-only access. Cannot edit products, orders, or any data.</p>
             </div>
           </div>
         </CardContent>
@@ -184,19 +200,21 @@ export default function StaffPage() {
                     >
                       {member.role}
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => handleRemove(member.user_id, member.email)}
-                      disabled={removingId === member.user_id}
-                    >
-                      {removingId === member.user_id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </Button>
+                    {canRemove && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => handleRemove(member.user_id, member.email)}
+                        disabled={removingId === member.user_id}
+                      >
+                        {removingId === member.user_id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -226,13 +244,19 @@ export default function StaffPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="invite-role">Role</Label>
-              <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as "partner" | "staff")}>
+              <Select
+                value={inviteRole}
+                onValueChange={(v) => setInviteRole(v as "partner" | "staff")}
+              >
                 <SelectTrigger id="invite-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="partner">Partner — can process orders</SelectItem>
-                  <SelectItem value="staff">Staff — view orders only</SelectItem>
+                  {canAssign.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {ROLE_LABELS[r] ?? r}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

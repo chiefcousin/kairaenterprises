@@ -1,7 +1,54 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const ZOHO_TOKEN_URL = "https://accounts.zoho.com/oauth/v2/token";
-const ZOHO_API_BASE = "https://www.zohoapis.com/inventory/v1";
+// ---------------------------------------------------------------------------
+// Zoho config — all values come from store_settings (admin panel), not env vars
+// ---------------------------------------------------------------------------
+
+interface ZohoConfig {
+  clientId: string;
+  clientSecret: string;
+  redirectUri: string;
+  orgId: string;
+  domain: string; // "in" | "com" | "eu" | "com.au" | "jp"
+}
+
+/** Reads Zoho integration config from the database. */
+export async function getZohoConfig(): Promise<ZohoConfig | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("store_settings")
+    .select("key, value")
+    .in("key", [
+      "zoho_client_id",
+      "zoho_client_secret",
+      "zoho_redirect_uri",
+      "zoho_org_id",
+      "zoho_domain",
+    ]);
+
+  if (!data || data.length === 0) return null;
+
+  const map = Object.fromEntries(data.map((r) => [r.key, r.value]));
+
+  // Require at least client_id and client_secret to consider it configured
+  if (!map.zoho_client_id || !map.zoho_client_secret) return null;
+
+  return {
+    clientId: map.zoho_client_id,
+    clientSecret: map.zoho_client_secret,
+    redirectUri: map.zoho_redirect_uri ?? "",
+    orgId: map.zoho_org_id ?? "",
+    domain: map.zoho_domain || "in",
+  };
+}
+
+function getAccountsUrl(domain: string) {
+  return `https://accounts.zoho.${domain}/oauth/v2`;
+}
+
+function getApiBase(domain: string) {
+  return `https://www.zohoapis.${domain}/inventory/v1`;
+}
 
 // ---------------------------------------------------------------------------
 // Token storage (uses store_settings key-value table via admin client)
@@ -42,7 +89,6 @@ async function storeTokens(
   expiresInSeconds: number
 ): Promise<void> {
   const supabase = createAdminClient();
-  // Subtract 60s buffer so we refresh before the token actually expires
   const expiresAt = Date.now() + expiresInSeconds * 1000 - 60_000;
   const now = new Date().toISOString();
 
@@ -68,14 +114,18 @@ async function storeTokens(
 // ---------------------------------------------------------------------------
 
 async function refreshAccessToken(refreshToken: string): Promise<string> {
+  const config = await getZohoConfig();
+  if (!config) throw new Error("Zoho is not configured");
+
   const params = new URLSearchParams({
     grant_type: "refresh_token",
-    client_id: process.env.ZOHO_CLIENT_ID!,
-    client_secret: process.env.ZOHO_CLIENT_SECRET!,
+    client_id: config.clientId,
+    client_secret: config.clientSecret,
     refresh_token: refreshToken,
   });
 
-  const res = await fetch(`${ZOHO_TOKEN_URL}?${params.toString()}`, {
+  const tokenUrl = `${getAccountsUrl(config.domain)}/token`;
+  const res = await fetch(`${tokenUrl}?${params.toString()}`, {
     method: "POST",
   });
 
@@ -90,7 +140,6 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
     throw new Error(`Zoho token error: ${json.error}`);
   }
 
-  // Zoho may rotate the refresh token — use the new one if returned
   const newRefreshToken = json.refresh_token ?? refreshToken;
   await storeTokens(json.access_token, newRefreshToken, json.expires_in ?? 3600);
   return json.access_token;
@@ -136,26 +185,51 @@ export async function isZohoConnected(): Promise<boolean> {
   return !!data?.value;
 }
 
+/** Returns true if Zoho credentials are configured (client_id + secret exist). */
+export async function isZohoConfigured(): Promise<boolean> {
+  const config = await getZohoConfig();
+  return config !== null;
+}
+
 /**
  * Authenticated fetch wrapper for Zoho Inventory API.
  * Automatically injects Authorization header and organization_id query param.
+ *
+ * For GET/DELETE: sends as-is.
+ * For POST/PUT: if `body` is provided, wraps it as form-encoded `JSONString`
+ * parameter (required by Zoho Inventory V1 API).
  */
 export async function zohoFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
   const token = await getValidAccessToken();
-  const orgId = process.env.ZOHO_ORG_ID!;
+  const config = await getZohoConfig();
+  if (!config) throw new Error("Zoho is not configured");
 
-  const url = new URL(`${ZOHO_API_BASE}${path}`);
-  url.searchParams.set("organization_id", orgId);
+  const url = new URL(`${getApiBase(config.domain)}${path}`);
+  url.searchParams.set("organization_id", config.orgId);
+
+  const method = (options.method ?? "GET").toUpperCase();
+  const headers: Record<string, string> = {
+    Authorization: `Zoho-oauthtoken ${token}`,
+  };
+
+  let body = options.body;
+
+  // Zoho Inventory V1 API expects POST/PUT data as form-encoded JSONString
+  if ((method === "POST" || method === "PUT") && body) {
+    const jsonPayload = typeof body === "string" ? body : JSON.stringify(body);
+    const formData = new URLSearchParams();
+    formData.set("JSONString", jsonPayload);
+    body = formData.toString();
+    headers["Content-Type"] = "application/x-www-form-urlencoded";
+  }
 
   return fetch(url.toString(), {
     ...options,
-    headers: {
-      Authorization: `Zoho-oauthtoken ${token}`,
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
+    method,
+    body,
+    headers,
   });
 }

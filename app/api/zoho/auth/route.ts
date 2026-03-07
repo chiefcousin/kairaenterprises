@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-
-const ZOHO_AUTH_URL = "https://accounts.zoho.com/oauth/v2/auth";
+import { getZohoConfig } from "@/lib/zoho/client";
 
 /**
  * GET /api/zoho/auth
@@ -18,19 +17,30 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const config = await getZohoConfig();
+  if (!config) {
+    return NextResponse.json(
+      { error: "Zoho is not configured. Add your credentials in Admin → Settings first." },
+      { status: 400 }
+    );
+  }
+
+  const domain = config.domain || "in";
+  const authUrl = `https://accounts.zoho.${domain}/oauth/v2/auth`;
+
   const params = new URLSearchParams({
     response_type: "code",
-    client_id: process.env.ZOHO_CLIENT_ID!,
+    client_id: config.clientId,
     scope: [
       "ZohoInventory.items.READ",
       "ZohoInventory.items.UPDATE",
       "ZohoInventory.salesorders.CREATE",
       "ZohoInventory.salesorders.READ",
     ].join(","),
-    redirect_uri: process.env.ZOHO_REDIRECT_URI!,
-    access_type: "offline", // required to receive a refresh token
-    prompt: "consent", // always issue a fresh refresh token
+    redirect_uri: config.redirectUri,
+    access_type: "offline",
+    prompt: "consent",
   });
 
-  return NextResponse.redirect(`${ZOHO_AUTH_URL}?${params.toString()}`);
+  return NextResponse.redirect(`${authUrl}?${params.toString()}`);
 }

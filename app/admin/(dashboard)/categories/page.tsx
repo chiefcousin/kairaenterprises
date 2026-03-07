@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { useUserRole } from "@/components/admin/role-context";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import type { Category } from "@/lib/types";
 
@@ -32,6 +33,8 @@ export default function AdminCategoriesPage() {
   const [sortOrder, setSortOrder] = useState("0");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const role = useUserRole();
+  const canEdit = role === "admin" || role === "partner";
 
   const supabase = createClient();
 
@@ -117,12 +120,14 @@ export default function AdminCategoriesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Categories</h1>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={openNew}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Category
-            </Button>
-          </DialogTrigger>
+          {canEdit && (
+            <DialogTrigger asChild>
+              <Button onClick={openNew}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Category
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
@@ -180,23 +185,25 @@ export default function AdminCategoriesPage() {
                 <td className="px-4 py-3 font-medium">{cat.name}</td>
                 <td className="px-4 py-3 text-muted-foreground">{cat.slug}</td>
                 <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEdit(cat)}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(cat)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  {canEdit && (
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEdit(cat)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDelete(cat)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
                 </td>
               </tr>
             ))}

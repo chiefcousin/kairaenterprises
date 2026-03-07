@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProductGrid } from "@/components/storefront/product-grid";
-import { FilterSidebar } from "@/components/storefront/filter-sidebar";
+import { FilterSidebar, ActiveFilters } from "@/components/storefront/filter-sidebar";
 import { SortSelect } from "@/components/storefront/sort-select";
 import { PRODUCT_PAGE_SIZE } from "@/lib/constants";
 import type { Metadata } from "next";
@@ -24,6 +24,7 @@ export default async function ProductsPage({
   const min_price = searchParams.min_price as string | undefined;
   const max_price = searchParams.max_price as string | undefined;
   const in_stock = searchParams.in_stock as string | undefined;
+  const on_sale = searchParams.on_sale as string | undefined;
   const is_featured = searchParams.is_featured as string | undefined;
   const sort = (searchParams.sort as string) || "newest";
   const page = parseInt((searchParams.page as string) || "1", 10);
@@ -49,6 +50,7 @@ export default async function ProductsPage({
   if (min_price) query = query.gte("price", parseFloat(min_price));
   if (max_price) query = query.lte("price", parseFloat(max_price));
   if (in_stock === "true") query = query.gt("stock_quantity", 0);
+  if (on_sale === "true") query = query.not("compare_at_price", "is", null);
   if (is_featured === "true") query = query.eq("is_featured", true);
 
   // Sorting
@@ -62,6 +64,18 @@ export default async function ProductsPage({
     case "name":
       query = query.order("name", { ascending: true });
       break;
+    case "discount":
+      // Products with biggest discount first (compare_at_price - price desc)
+      // Supabase doesn't support computed column ordering, so we sort by
+      // compare_at_price desc and then price asc as a proxy
+      query = query
+        .not("compare_at_price", "is", null)
+        .order("compare_at_price", { ascending: false })
+        .order("price", { ascending: true });
+      break;
+    case "bestsellers":
+      // Order by number of confirmed orders. We use a secondary query below.
+      break;
     default:
       query = query.order("created_at", { ascending: false });
   }
@@ -71,6 +85,27 @@ export default async function ProductsPage({
   query = query.range(from, from + PRODUCT_PAGE_SIZE - 1);
 
   const { data: products, count } = await query;
+
+  // For bestseller sort: fetch order counts and re-sort client-side
+  let sortedProducts = products || [];
+  if (sort === "bestsellers" && sortedProducts.length > 0) {
+    const productIds = sortedProducts.map((p) => p.id);
+    const { data: orderCounts } = await supabase
+      .from("whatsapp_orders")
+      .select("product_id")
+      .in("product_id", productIds)
+      .in("status", ["confirmed", "fulfilled"]);
+
+    const countMap: Record<string, number> = {};
+    orderCounts?.forEach((o) => {
+      countMap[o.product_id] = (countMap[o.product_id] || 0) + 1;
+    });
+
+    sortedProducts = [...sortedProducts].sort(
+      (a, b) => (countMap[b.id] || 0) - (countMap[a.id] || 0)
+    );
+  }
+
   const totalPages = Math.ceil((count || 0) / PRODUCT_PAGE_SIZE);
 
   // Fetch filter options
@@ -79,7 +114,9 @@ export default async function ProductsPage({
     .select("brand")
     .eq("is_active", true)
     .not("brand", "is", null);
-  const uniqueBrands = Array.from(new Set(brands?.map((b) => b.brand).filter(Boolean)));
+  const uniqueBrands = Array.from(
+    new Set(brands?.map((b) => b.brand).filter(Boolean))
+  );
 
   const { data: categories } = await supabase
     .from("categories")
@@ -98,14 +135,19 @@ export default async function ProductsPage({
           />
         </aside>
         <div className="flex-1">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-muted-foreground">
               {count || 0} product{count !== 1 ? "s" : ""} found
             </p>
             <SortSelect current={sort} />
           </div>
+          <div className="mb-4">
+            <ActiveFilters
+              currentFilters={searchParams as Record<string, string>}
+            />
+          </div>
           <ProductGrid
-            products={(products || []) as unknown as ProductWithPrimaryImage[]}
+            products={sortedProducts as unknown as ProductWithPrimaryImage[]}
             emptyMessage="No products match your filters"
           />
           {totalPages > 1 && (

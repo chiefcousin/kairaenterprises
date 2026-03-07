@@ -26,6 +26,7 @@ export function SignupForm() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save details");
       localStorage.setItem("ka_customer_registered", "1");
+      localStorage.setItem("ka_customer_phone", phone);
       // Full reload so middleware picks up the new cookie
       window.location.href = "/";
     } catch (err) {

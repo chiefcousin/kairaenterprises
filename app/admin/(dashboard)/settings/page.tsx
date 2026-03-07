@@ -27,12 +27,17 @@ export default async function SettingsPage() {
       {} as Record<string, string>
     ) ?? {};
 
-  // Zoho-specific settings via admin client (bypasses RLS for token fields)
+  // Zoho-specific settings via admin client (bypasses RLS for token/credential fields)
   const adminSupabase = createAdminClient();
   const { data: zohoRows } = await adminSupabase
     .from("store_settings")
     .select("key, value")
     .in("key", [
+      "zoho_client_id",
+      "zoho_client_secret",
+      "zoho_redirect_uri",
+      "zoho_org_id",
+      "zoho_domain",
       "zoho_refresh_token",
       "zoho_last_sync_at",
       "zoho_sync_status",
@@ -43,6 +48,8 @@ export default async function SettingsPage() {
   const zohoMap = Object.fromEntries(
     (zohoRows ?? []).map((r) => [r.key, r.value ?? ""])
   );
+
+  const isConfigured = !!(zohoMap.zoho_client_id && zohoMap.zoho_client_secret);
 
   // Generate a webhook token on first load if one doesn't exist yet
   let webhookToken = zohoMap.zoho_webhook_token || "";
@@ -95,12 +102,20 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ZohoSettings
+            isConfigured={isConfigured}
             isConnected={!!zohoMap.zoho_refresh_token}
             lastSyncAt={zohoMap.zoho_last_sync_at || null}
             syncStatus={zohoMap.zoho_sync_status || "idle"}
             syncError={zohoMap.zoho_sync_error || null}
             webhookToken={webhookToken}
             baseUrl={baseUrl}
+            config={{
+              client_id: zohoMap.zoho_client_id || "",
+              client_secret: zohoMap.zoho_client_secret || "",
+              redirect_uri: zohoMap.zoho_redirect_uri || "",
+              org_id: zohoMap.zoho_org_id || "",
+              domain: zohoMap.zoho_domain || "in",
+            }}
           />
         </CardContent>
       </Card>

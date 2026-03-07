@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useUserRole } from "@/components/admin/role-context";
 import {
   LayoutDashboard,
   Package,
@@ -17,22 +18,32 @@ import {
   Contact,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { UserRole } from "@/lib/roles";
 
-const navItems = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  /** Roles that can see this item. Undefined = all roles. */
+  roles?: UserRole[];
+}
+
+const navItems: NavItem[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/admin/products", label: "Products", icon: Package },
   { href: "/admin/categories", label: "Categories", icon: FolderTree },
   { href: "/admin/orders", label: "Orders", icon: MessageCircle },
   { href: "/admin/inventory", label: "Inventory", icon: Boxes },
-  { href: "/admin/customers", label: "Customers", icon: Contact },
-  { href: "/admin/staff", label: "Staff", icon: Users },
-  { href: "/admin/settings", label: "Settings", icon: Settings },
+  { href: "/admin/customers", label: "Customers", icon: Contact, roles: ["admin", "partner"] },
+  { href: "/admin/staff", label: "Staff", icon: Users, roles: ["admin", "partner"] },
+  { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["admin", "partner"] },
 ];
 
 export function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
+  const role = useUserRole();
 
   async function handleLogout() {
     const supabase = createClient();
@@ -41,6 +52,10 @@ export function AdminSidebar() {
     router.refresh();
   }
 
+  const visibleItems = navItems.filter(
+    (item) => !item.roles || item.roles.includes(role)
+  );
+
   return (
     <aside className="flex w-60 flex-col border-r bg-white">
       <div className="flex h-16 items-center gap-2 border-b px-4">
@@ -48,7 +63,7 @@ export function AdminSidebar() {
         <span className="font-bold">Kaira Admin</span>
       </div>
       <nav className="flex-1 space-y-1 p-3">
-        {navItems.map((item) => {
+        {visibleItems.map((item) => {
           const isActive =
             item.href === "/admin"
               ? pathname === "/admin"
@@ -70,6 +85,11 @@ export function AdminSidebar() {
         })}
       </nav>
       <div className="border-t p-3">
+        <div className="mb-2 px-3">
+          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium capitalize text-muted-foreground">
+            {role}
+          </span>
+        </div>
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 text-muted-foreground"

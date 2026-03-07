@@ -90,6 +90,19 @@ export interface UserRole {
   created_at: string;
 }
 
+export interface ProductReview {
+  id: string;
+  product_id: string;
+  customer_phone: string;
+  customer_name: string;
+  rating: number;
+  title: string | null;
+  review: string | null;
+  is_approved: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // Extended types with joins
 export interface ProductWithImages extends Product {
   product_images: ProductImage[];

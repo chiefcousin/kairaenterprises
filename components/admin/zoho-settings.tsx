@@ -20,8 +20,6 @@ interface ZohoSettingsProps {
   lastSyncAt: string | null;
   syncStatus: string;
   syncError: string | null;
-  webhookToken: string;
-  baseUrl: string;
   config: {
     client_id: string;
     client_secret: string;
@@ -45,8 +43,6 @@ export function ZohoSettings({
   isConnected,
   lastSyncAt,
   syncError: initialSyncError,
-  webhookToken,
-  baseUrl,
   config: initialConfig,
 }: ZohoSettingsProps) {
   const router = useRouter();
@@ -61,18 +57,15 @@ export function ZohoSettings({
     errors: string[];
   } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(initialSyncError);
-  const [copied, setCopied] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     client_id: initialConfig.client_id,
     client_secret: initialConfig.client_secret,
-    redirect_uri: initialConfig.redirect_uri || `${baseUrl}/api/zoho/callback`,
+    redirect_uri: initialConfig.redirect_uri,
     org_id: initialConfig.org_id,
     domain: initialConfig.domain || "in",
   });
-
-  const webhookUrl = `${baseUrl}/api/zoho/webhook?token=${webhookToken}`;
 
   async function handleSaveConfig(e: React.FormEvent) {
     e.preventDefault();
@@ -134,12 +127,6 @@ export function ZohoSettings({
     }
   }
 
-  async function copyWebhookUrl() {
-    await navigator.clipboard.writeText(webhookUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
   // ---- Setup form (shown when not configured or when editing) ----
   if (showSetup) {
     return (
@@ -148,7 +135,7 @@ export function ZohoSettings({
           Enter your Zoho API credentials. Create a Server-based Application at{" "}
           <strong>api-console.zoho.com</strong> and set the redirect URI to:{" "}
           <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
-            {baseUrl}/api/zoho/callback
+            https://yourdomain.com/api/zoho/callback
           </code>
         </p>
 
@@ -220,7 +207,7 @@ export function ZohoSettings({
               onChange={(e) =>
                 setFormData({ ...formData, redirect_uri: e.target.value })
               }
-              placeholder={`${baseUrl}/api/zoho/callback`}
+              placeholder="https://yourdomain.com/api/zoho/callback"
               required
             />
             <p className="text-xs text-muted-foreground">
@@ -373,31 +360,14 @@ export function ZohoSettings({
             </div>
           )}
 
-          {/* Webhook URL */}
-          <div className="border-t pt-4">
-            <p className="mb-0.5 text-sm font-medium">Webhook URL</p>
-            <p className="mb-2 text-xs text-muted-foreground">
-              Register this in Zoho Inventory → Settings → Webhooks for
-              automatic real-time product updates when items change in Zoho.
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 overflow-x-auto rounded bg-muted px-3 py-2 text-xs">
-                {webhookUrl}
-              </code>
-              <Button variant="outline" size="sm" onClick={copyWebhookUrl}>
-                {copied ? "Copied!" : "Copy"}
-              </Button>
-            </div>
-          </div>
-
           {/* How it works */}
           <div className="border-t pt-4 text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground text-sm">How it works</p>
             <p>
-              <strong>Zoho → Kaira Enterprises:</strong> Click &quot;Sync
-              Products from Zoho&quot; to pull item names, descriptions, prices,
-              and stock into your catalog. Set up the webhook for automatic
-              real-time updates.
+              <strong>Auto-sync (every hour):</strong> Products are automatically
+              synced from Zoho Inventory every hour. Names, descriptions, prices,
+              and stock levels are kept up to date. You can also click the button
+              above to sync immediately.
             </p>
             <p>
               <strong>Kaira Enterprises → Zoho:</strong> When you mark a

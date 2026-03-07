@@ -1,4 +1,3 @@
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SettingsForm } from "@/components/admin/settings-form";
@@ -42,7 +41,6 @@ export default async function SettingsPage() {
       "zoho_last_sync_at",
       "zoho_sync_status",
       "zoho_sync_error",
-      "zoho_webhook_token",
     ]);
 
   const zohoMap = Object.fromEntries(
@@ -50,26 +48,6 @@ export default async function SettingsPage() {
   );
 
   const isConfigured = !!(zohoMap.zoho_client_id && zohoMap.zoho_client_secret);
-
-  // Generate a webhook token on first load if one doesn't exist yet
-  let webhookToken = zohoMap.zoho_webhook_token || "";
-  if (!webhookToken) {
-    webhookToken = crypto.randomUUID();
-    await adminSupabase.from("store_settings").upsert(
-      {
-        key: "zoho_webhook_token",
-        value: webhookToken,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "key" }
-    );
-  }
-
-  // Derive the public base URL for displaying the webhook URL
-  const headersList = headers();
-  const host = headersList.get("host") ?? "localhost:3000";
-  const proto = host.startsWith("localhost") ? "http" : "https";
-  const baseUrl = `${proto}://${host}`;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
@@ -107,8 +85,6 @@ export default async function SettingsPage() {
             lastSyncAt={zohoMap.zoho_last_sync_at || null}
             syncStatus={zohoMap.zoho_sync_status || "idle"}
             syncError={zohoMap.zoho_sync_error || null}
-            webhookToken={webhookToken}
-            baseUrl={baseUrl}
             config={{
               client_id: zohoMap.zoho_client_id || "",
               client_secret: zohoMap.zoho_client_secret || "",

@@ -364,10 +364,10 @@ export function ZohoSettings({
           <div className="border-t pt-4 text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground text-sm">How it works</p>
             <p>
-              <strong>Auto-sync (every hour):</strong> Products are automatically
-              synced from Zoho Inventory every hour. Names, descriptions, prices,
-              and stock levels are kept up to date. You can also click the button
-              above to sync immediately.
+              <strong>Auto-sync (daily):</strong> Products are automatically
+              synced from Zoho Inventory every day at midnight UTC (5:30 AM IST).
+              Names, descriptions, prices, and stock levels are kept up to date.
+              You can also click the button above to sync immediately.
             </p>
             <p>
               <strong>Kaira Enterprises → Zoho:</strong> When you mark a

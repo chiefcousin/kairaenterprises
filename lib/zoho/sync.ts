@@ -55,11 +55,20 @@ async function fetchAllZohoItems(): Promise<ZohoItem[]> {
 
   while (hasMore) {
     const res = await zohoFetch(`/items?page=${page}&per_page=200`);
+    const body = await res.text();
+
     if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Zoho items fetch failed (page ${page}): ${body}`);
+      throw new Error(`Zoho items fetch failed (page ${page}, ${res.status}): ${body.slice(0, 300)}`);
     }
-    const json: ZohoItemsResponse = await res.json();
+
+    let json: ZohoItemsResponse;
+    try {
+      json = JSON.parse(body);
+    } catch {
+      throw new Error(
+        `Zoho returned invalid JSON (page ${page}, ${res.status}): ${body.slice(0, 300)}`
+      );
+    }
 
     if (json.code !== 0) {
       throw new Error(`Zoho API error ${json.code}: ${json.message}`);
@@ -185,13 +194,22 @@ export async function syncProductsFromZoho(): Promise<SyncResult> {
  */
 export async function syncSingleItemFromZoho(zohoItemId: string): Promise<void> {
   const res = await zohoFetch(`/items/${zohoItemId}`);
+  const body = await res.text();
+
   if (!res.ok) {
     throw new Error(
-      `Could not fetch Zoho item ${zohoItemId}: ${res.statusText}`
+      `Could not fetch Zoho item ${zohoItemId} (${res.status}): ${body.slice(0, 300)}`
     );
   }
 
-  const json: ZohoItemResponse = await res.json();
+  let json: ZohoItemResponse;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    throw new Error(
+      `Zoho returned invalid JSON for item ${zohoItemId}: ${body.slice(0, 300)}`
+    );
+  }
   if (json.code !== 0) {
     throw new Error(`Zoho API error ${json.code}: ${json.message}`);
   }

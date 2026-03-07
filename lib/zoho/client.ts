@@ -129,12 +129,20 @@ async function refreshAccessToken(refreshToken: string): Promise<string> {
     method: "POST",
   });
 
+  const body = await res.text();
+
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Zoho token refresh failed: ${body}`);
+    throw new Error(`Zoho token refresh failed (${res.status}): ${body}`);
   }
 
-  const json = await res.json();
+  let json;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    throw new Error(
+      `Zoho token refresh returned invalid JSON (${res.status}): ${body.slice(0, 200)}`
+    );
+  }
 
   if (json.error) {
     throw new Error(`Zoho token error: ${json.error}`);

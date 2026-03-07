@@ -41,12 +41,18 @@ export async function GET(request: NextRequest) {
       method: "POST",
     });
 
+    const body = await res.text();
+
     if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Token exchange failed: ${body}`);
+      throw new Error(`Token exchange failed (${res.status}): ${body.slice(0, 300)}`);
     }
 
-    const json = await res.json();
+    let json;
+    try {
+      json = JSON.parse(body);
+    } catch {
+      throw new Error(`Zoho returned invalid response: ${body.slice(0, 300)}`);
+    }
 
     if (json.error) {
       throw new Error(`Zoho error: ${json.error}`);

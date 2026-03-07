@@ -114,7 +114,14 @@ export function ZohoSettings({
 
     try {
       const res = await fetch("/api/zoho/sync", { method: "POST" });
-      const json = await res.json();
+      const text = await res.text();
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        setSyncError(`Server returned unexpected response (${res.status}): ${text.slice(0, 200)}`);
+        return;
+      }
       if (!res.ok) {
         setSyncError(json.error ?? "Sync failed");
       } else {

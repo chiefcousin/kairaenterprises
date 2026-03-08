@@ -199,9 +199,15 @@ export async function isZohoConfigured(): Promise<boolean> {
   return config !== null;
 }
 
+// Cache token and config within a single function invocation to avoid
+// repeated DB round-trips when making multiple Zoho API calls (e.g. pagination).
+let cachedToken: string | null = null;
+let cachedConfig: ZohoConfig | null = null;
+
 /**
  * Authenticated fetch wrapper for Zoho Inventory API.
  * Automatically injects Authorization header and organization_id query param.
+ * Caches token and config within the same serverless invocation.
  *
  * For GET/DELETE: sends as-is.
  * For POST/PUT: if `body` is provided, wraps it as form-encoded `JSONString`
@@ -211,16 +217,18 @@ export async function zohoFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<Response> {
-  const token = await getValidAccessToken();
-  const config = await getZohoConfig();
-  if (!config) throw new Error("Zoho is not configured");
+  if (!cachedToken) cachedToken = await getValidAccessToken();
+  if (!cachedConfig) {
+    cachedConfig = await getZohoConfig();
+    if (!cachedConfig) throw new Error("Zoho is not configured");
+  }
 
-  const url = new URL(`${getApiBase(config.domain)}${path}`);
-  url.searchParams.set("organization_id", config.orgId);
+  const url = new URL(`${getApiBase(cachedConfig.domain)}${path}`);
+  url.searchParams.set("organization_id", cachedConfig.orgId);
 
   const method = (options.method ?? "GET").toUpperCase();
   const headers: Record<string, string> = {
-    Authorization: `Zoho-oauthtoken ${token}`,
+    Authorization: `Zoho-oauthtoken ${cachedToken}`,
   };
 
   let body = options.body;
@@ -234,10 +242,25 @@ export async function zohoFetch(
     headers["Content-Type"] = "application/x-www-form-urlencoded";
   }
 
-  return fetch(url.toString(), {
+  const res = await fetch(url.toString(), {
     ...options,
     method,
     body,
     headers,
   });
+
+  // If we get a 401, the cached token may have expired — clear cache and retry once
+  if (res.status === 401 && cachedToken) {
+    cachedToken = null;
+    cachedToken = await getValidAccessToken();
+    headers.Authorization = `Zoho-oauthtoken ${cachedToken}`;
+    return fetch(url.toString(), {
+      ...options,
+      method,
+      body,
+      headers,
+    });
+  }
+
+  return res;
 }

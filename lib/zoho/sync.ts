@@ -2,6 +2,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { zohoFetch } from "./client";
 import type { ZohoItem, ZohoItemsResponse, ZohoItemResponse, SyncResult } from "./types";
 
+/** Time budget: stop processing if we've used more than 50s of the 60s limit */
+const TIME_BUDGET_MS = 50_000;
+
 // ---------------------------------------------------------------------------
 // Field mapping: Zoho item → Kaira Enterprises product columns
 // ---------------------------------------------------------------------------
@@ -48,38 +51,35 @@ function generateSlug(name: string, itemId: string): string {
 // Fetch helpers
 // ---------------------------------------------------------------------------
 
-async function fetchAllZohoItems(): Promise<ZohoItem[]> {
-  const allItems: ZohoItem[] = [];
-  let page = 1;
-  let hasMore = true;
+/** Fetches one page of Zoho items. Returns items and whether more pages exist. */
+async function fetchZohoItemsPage(page: number): Promise<{
+  items: ZohoItem[];
+  hasMore: boolean;
+}> {
+  const res = await zohoFetch(`/items?page=${page}&per_page=200`);
+  const body = await res.text();
 
-  while (hasMore) {
-    const res = await zohoFetch(`/items?page=${page}&per_page=200`);
-    const body = await res.text();
-
-    if (!res.ok) {
-      throw new Error(`Zoho items fetch failed (page ${page}, ${res.status}): ${body.slice(0, 300)}`);
-    }
-
-    let json: ZohoItemsResponse;
-    try {
-      json = JSON.parse(body);
-    } catch {
-      throw new Error(
-        `Zoho returned invalid JSON (page ${page}, ${res.status}): ${body.slice(0, 300)}`
-      );
-    }
-
-    if (json.code !== 0) {
-      throw new Error(`Zoho API error ${json.code}: ${json.message}`);
-    }
-
-    allItems.push(...json.items);
-    hasMore = json.page_context?.has_more_page ?? false;
-    page++;
+  if (!res.ok) {
+    throw new Error(`Zoho items fetch failed (page ${page}, ${res.status}): ${body.slice(0, 300)}`);
   }
 
-  return allItems;
+  let json: ZohoItemsResponse;
+  try {
+    json = JSON.parse(body);
+  } catch {
+    throw new Error(
+      `Zoho returned invalid JSON (page ${page}, ${res.status}): ${body.slice(0, 300)}`
+    );
+  }
+
+  if (json.code !== 0) {
+    throw new Error(`Zoho API error ${json.code}: ${json.message}`);
+  }
+
+  return {
+    items: json.items,
+    hasMore: json.page_context?.has_more_page ?? false,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -229,15 +229,83 @@ async function deleteEmptyCategories(
 // ---------------------------------------------------------------------------
 
 /**
- * Full sync: fetches all items from Zoho and upserts them into the products table.
- * Existing products are updated (Zoho-owned fields only).
- * New items create new product rows with an auto-generated slug and auto-assigned category.
- * After sync, empty categories are cleaned up.
+ * Processes a batch of Zoho items: resolves categories and prepares upsert/insert rows.
+ * Returns the rows separated into updates and inserts.
+ */
+function processItemBatch(
+  items: ZohoItem[],
+  existingProducts: Map<string, { id: string; category_id: string | null }>,
+  categoryMap: CategoryMap,
+  errors: string[]
+): {
+  toUpdate: Record<string, unknown>[];
+  toInsert: Record<string, unknown>[];
+  newCategories: { item: ZohoItem; key: string; rawLabel: string }[];
+} {
+  const toUpdate: Record<string, unknown>[] = [];
+  const toInsert: Record<string, unknown>[] = [];
+  const newCategories: { item: ZohoItem; key: string; rawLabel: string }[] = [];
+
+  for (const item of items) {
+    try {
+      const productData = mapZohoItemToProduct(item);
+
+      // Resolve category synchronously from the in-memory map
+      const rawLabel = (item.group_name || item.category_name || "").trim();
+      const catKey = rawLabel ? rawLabel.toLowerCase() : "";
+      const existingCat = catKey ? categoryMap.get(catKey) : undefined;
+      const categoryId = existingCat?.id ?? null;
+
+      // Track new categories we need to create
+      if (catKey && !existingCat) {
+        newCategories.push({ item, key: catKey, rawLabel });
+      }
+
+      const existing = existingProducts.get(item.item_id);
+
+      if (existing) {
+        toUpdate.push({
+          id: existing.id,
+          name: productData.name,
+          description: productData.description,
+          price: productData.price,
+          compare_at_price: productData.compare_at_price,
+          sku: productData.sku,
+          stock_quantity: productData.stock_quantity,
+          is_active: productData.is_active,
+          last_synced_from_zoho: productData.last_synced_from_zoho,
+          zoho_item_id: item.item_id,
+          ...(!existing.category_id && categoryId
+            ? { category_id: categoryId }
+            : {}),
+        });
+      } else {
+        const slug = generateSlug(item.name, item.item_id);
+        toInsert.push({
+          ...productData,
+          slug,
+          ...(categoryId ? { category_id: categoryId } : {}),
+        });
+      }
+    } catch (itemErr) {
+      const msg = itemErr instanceof Error ? itemErr.message : String(itemErr);
+      errors.push(`Item ${item.item_id}: ${msg}`);
+    }
+  }
+
+  return { toUpdate, toInsert, newCategories };
+}
+
+/**
+ * Full sync: fetches items from Zoho page-by-page and upserts them into the
+ * products table. Processes each page immediately to avoid holding all data in
+ * memory and to stay within Vercel's 60-second function timeout.
  *
- * Optimized for Vercel's 60-second function timeout by batching DB operations
- * instead of making individual queries per product.
+ * Uses a 50-second time budget — stops fetching new pages when time runs low
+ * so we can still persist the results we have.
  */
 export async function syncProductsFromZoho(): Promise<SyncResult> {
+  const startTime = Date.now();
   const result: SyncResult = {
     total: 0,
     created: 0,
@@ -249,91 +317,93 @@ export async function syncProductsFromZoho(): Promise<SyncResult> {
   const supabase = createAdminClient();
 
   try {
-    const items = await fetchAllZohoItems();
-    result.total = items.length;
-
     // Load categories and existing products in parallel
     const [categoryMap, existingProducts] = await Promise.all([
       loadCategoryMap(supabase),
       loadExistingProductsByZohoId(supabase),
     ]);
 
-    // Resolve all categories first (only creates new ones as needed)
-    const categoryIds = new Map<string, string | null>();
-    for (const item of items) {
-      const categoryId = await resolveCategory(item, categoryMap, supabase);
-      categoryIds.set(item.item_id, categoryId);
-    }
+    // Process page by page — fetch, transform, write, then next page
+    let page = 1;
+    let hasMore = true;
 
-    // Separate items into batches for update and insert
-    const toUpdate: Record<string, unknown>[] = [];
-    const toInsert: Record<string, unknown>[] = [];
+    while (hasMore) {
+      // Check time budget before fetching the next page
+      if (Date.now() - startTime > TIME_BUDGET_MS) {
+        result.errors.push(
+          `Stopped after page ${page - 1}: approaching timeout. Run sync again to continue.`
+        );
+        break;
+      }
 
-    for (const item of items) {
-      try {
-        const productData = mapZohoItemToProduct(item);
-        const existing = existingProducts.get(item.item_id);
-        const categoryId = categoryIds.get(item.item_id) ?? null;
+      const pageResult = await fetchZohoItemsPage(page);
+      const items = pageResult.items;
+      hasMore = pageResult.hasMore;
+      result.total += items.length;
 
-        if (existing) {
-          toUpdate.push({
-            id: existing.id,
-            name: productData.name,
-            description: productData.description,
-            price: productData.price,
-            compare_at_price: productData.compare_at_price,
-            sku: productData.sku,
-            stock_quantity: productData.stock_quantity,
-            is_active: productData.is_active,
-            last_synced_from_zoho: productData.last_synced_from_zoho,
-            zoho_item_id: item.item_id,
-            // Only assign category if product is uncategorized
-            ...(!existing.category_id && categoryId
-              ? { category_id: categoryId }
-              : {}),
-          });
-        } else {
-          const slug = generateSlug(item.name, item.item_id);
-          toInsert.push({
-            ...productData,
-            slug,
-            ...(categoryId ? { category_id: categoryId } : {}),
+      // Create any new categories needed by this page's items (batch)
+      const uniqueNewCats = new Map<string, string>();
+      for (const item of items) {
+        const rawLabel = (item.group_name || item.category_name || "").trim();
+        if (!rawLabel) continue;
+        const key = rawLabel.toLowerCase();
+        if (!categoryMap.has(key) && !uniqueNewCats.has(key)) {
+          uniqueNewCats.set(key, rawLabel);
+        }
+      }
+
+      // Insert all new categories in one batch
+      if (uniqueNewCats.size > 0) {
+        const catRows = Array.from(uniqueNewCats.entries()).map(
+          ([, rawLabel], idx) => ({
+            name: rawLabel,
+            slug: categorySlug(rawLabel),
+            sort_order: categoryMap.size + idx + 1,
+          })
+        );
+        const { data: created } = await supabase
+          .from("categories")
+          .upsert(catRows, { onConflict: "slug" })
+          .select("id, name");
+        for (const cat of created ?? []) {
+          categoryMap.set(cat.name.toLowerCase(), {
+            id: cat.id,
+            name: cat.name,
           });
         }
-      } catch (itemErr) {
-        const msg =
-          itemErr instanceof Error ? itemErr.message : String(itemErr);
-        result.errors.push(`Item ${item.item_id}: ${msg}`);
       }
-    }
 
-    // Batch upsert existing products (uses id as conflict target to update)
-    const BATCH_SIZE = 50;
-    if (toUpdate.length > 0) {
-      for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
-        const batch = toUpdate.slice(i, i + BATCH_SIZE);
+      // Process items into update/insert rows
+      const { toUpdate, toInsert } = processItemBatch(
+        items,
+        existingProducts,
+        categoryMap,
+        result.errors
+      );
+
+      // Write updates in one batch
+      if (toUpdate.length > 0) {
         const { error } = await supabase
           .from("products")
-          .upsert(batch, { onConflict: "id" });
+          .upsert(toUpdate, { onConflict: "id" });
         if (error) {
-          result.errors.push(`Batch update error: ${error.message}`);
+          result.errors.push(`Page ${page} update error: ${error.message}`);
         } else {
-          result.updated += batch.length;
+          result.updated += toUpdate.length;
         }
       }
-    }
 
-    // Batch insert new products
-    if (toInsert.length > 0) {
-      for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
-        const batch = toInsert.slice(i, i + BATCH_SIZE);
-        const { error } = await supabase.from("products").insert(batch);
+      // Write inserts in one batch
+      if (toInsert.length > 0) {
+        const { error } = await supabase.from("products").insert(toInsert);
         if (error) {
-          result.errors.push(`Batch insert error: ${error.message}`);
+          result.errors.push(`Page ${page} insert error: ${error.message}`);
         } else {
-          result.created += batch.length;
+          result.created += toInsert.length;
         }
       }
+
+      page++;
     }
 
     // Clean up empty categories after sync

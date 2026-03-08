@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { syncProductsFromZoho } from "@/lib/zoho/sync";
 import { isZohoConnected } from "@/lib/zoho/client";
 
+export const maxDuration = 60;
+
 /**
  * GET /api/cron/zoho-sync
  *

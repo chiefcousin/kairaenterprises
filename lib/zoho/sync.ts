@@ -177,6 +177,21 @@ async function resolveCategory(
   return created.id;
 }
 
+/** Loads all existing products that have a zoho_item_id, keyed by zoho_item_id */
+async function loadExistingProductsByZohoId(
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<Map<string, { id: string; category_id: string | null }>> {
+  const map = new Map<string, { id: string; category_id: string | null }>();
+  const { data } = await supabase
+    .from("products")
+    .select("id, zoho_item_id, category_id")
+    .not("zoho_item_id", "is", null);
+  for (const row of data ?? []) {
+    map.set(row.zoho_item_id, { id: row.id, category_id: row.category_id });
+  }
+  return map;
+}
+
 /** Deletes all categories that have zero products assigned to them. */
 async function deleteEmptyCategories(
   supabase: ReturnType<typeof createAdminClient>
@@ -218,6 +233,9 @@ async function deleteEmptyCategories(
  * Existing products are updated (Zoho-owned fields only).
  * New items create new product rows with an auto-generated slug and auto-assigned category.
  * After sync, empty categories are cleaned up.
+ *
+ * Optimized for Vercel's 60-second function timeout by batching DB operations
+ * instead of making individual queries per product.
  */
 export async function syncProductsFromZoho(): Promise<SyncResult> {
   const result: SyncResult = {
@@ -234,22 +252,32 @@ export async function syncProductsFromZoho(): Promise<SyncResult> {
     const items = await fetchAllZohoItems();
     result.total = items.length;
 
-    // Load categories once for efficient lookups during the sync loop
-    const categoryMap = await loadCategoryMap(supabase);
+    // Load categories and existing products in parallel
+    const [categoryMap, existingProducts] = await Promise.all([
+      loadCategoryMap(supabase),
+      loadExistingProductsByZohoId(supabase),
+    ]);
+
+    // Resolve all categories first (only creates new ones as needed)
+    const categoryIds = new Map<string, string | null>();
+    for (const item of items) {
+      const categoryId = await resolveCategory(item, categoryMap, supabase);
+      categoryIds.set(item.item_id, categoryId);
+    }
+
+    // Separate items into batches for update and insert
+    const toUpdate: Record<string, unknown>[] = [];
+    const toInsert: Record<string, unknown>[] = [];
 
     for (const item of items) {
       try {
         const productData = mapZohoItemToProduct(item);
-
-        const { data: existing } = await supabase
-          .from("products")
-          .select("id, slug, category_id")
-          .eq("zoho_item_id", item.item_id)
-          .maybeSingle();
+        const existing = existingProducts.get(item.item_id);
+        const categoryId = categoryIds.get(item.item_id) ?? null;
 
         if (existing) {
-          // Update Zoho-owned fields; re-categorize only if product has no category
-          const updatePayload: Record<string, unknown> = {
+          toUpdate.push({
+            id: existing.id,
             name: productData.name,
             description: productData.description,
             price: productData.price,
@@ -258,44 +286,53 @@ export async function syncProductsFromZoho(): Promise<SyncResult> {
             stock_quantity: productData.stock_quantity,
             is_active: productData.is_active,
             last_synced_from_zoho: productData.last_synced_from_zoho,
-          };
-
-          // Auto-assign category if product is uncategorized
-          if (!existing.category_id) {
-            const categoryId = await resolveCategory(item, categoryMap, supabase);
-            if (categoryId) {
-              updatePayload.category_id = categoryId;
-            }
-          }
-
-          await supabase
-            .from("products")
-            .update(updatePayload)
-            .eq("id", existing.id);
-          result.updated++;
+            zoho_item_id: item.item_id,
+            // Only assign category if product is uncategorized
+            ...(!existing.category_id && categoryId
+              ? { category_id: categoryId }
+              : {}),
+          });
         } else {
-          // New product: auto-assign category from Zoho group/category
-          const categoryId = await resolveCategory(item, categoryMap, supabase);
           const slug = generateSlug(item.name, item.item_id);
-          const { error: insertError } = await supabase
-            .from("products")
-            .insert({
-              ...productData,
-              slug,
-              ...(categoryId ? { category_id: categoryId } : {}),
-            });
-          if (insertError) {
-            result.errors.push(
-              `Failed to insert "${item.name}": ${insertError.message}`
-            );
-          } else {
-            result.created++;
-          }
+          toInsert.push({
+            ...productData,
+            slug,
+            ...(categoryId ? { category_id: categoryId } : {}),
+          });
         }
       } catch (itemErr) {
         const msg =
           itemErr instanceof Error ? itemErr.message : String(itemErr);
         result.errors.push(`Item ${item.item_id}: ${msg}`);
+      }
+    }
+
+    // Batch upsert existing products (uses id as conflict target to update)
+    const BATCH_SIZE = 50;
+    if (toUpdate.length > 0) {
+      for (let i = 0; i < toUpdate.length; i += BATCH_SIZE) {
+        const batch = toUpdate.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase
+          .from("products")
+          .upsert(batch, { onConflict: "id" });
+        if (error) {
+          result.errors.push(`Batch update error: ${error.message}`);
+        } else {
+          result.updated += batch.length;
+        }
+      }
+    }
+
+    // Batch insert new products
+    if (toInsert.length > 0) {
+      for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
+        const batch = toInsert.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase.from("products").insert(batch);
+        if (error) {
+          result.errors.push(`Batch insert error: ${error.message}`);
+        } else {
+          result.created += batch.length;
+        }
       }
     }
 

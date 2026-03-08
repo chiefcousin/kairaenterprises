@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { syncProductsFromZoho } from "@/lib/zoho/sync";
 
+export const maxDuration = 60;
+
 /**
  * POST /api/zoho/sync
  * Triggers a full product sync from Zoho Inventory → Kaira Enterprises.

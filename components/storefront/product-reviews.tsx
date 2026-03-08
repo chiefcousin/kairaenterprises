@@ -50,7 +50,7 @@ function StarRating({
             className={`${px} ${
               star <= (hover || rating)
                 ? "fill-yellow-400 text-yellow-400"
-                : "text-gray-300"
+                : "text-muted-foreground/40"
             }`}
           />
         </button>

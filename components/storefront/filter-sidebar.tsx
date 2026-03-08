@@ -150,7 +150,7 @@ function FilterContent({
             onChange={(e) =>
               setFilter("in_stock", e.target.checked ? "true" : null)
             }
-            className="rounded border-gray-300"
+            className="rounded border-input"
           />
           <span className="text-sm">In stock only</span>
         </label>
@@ -161,7 +161,7 @@ function FilterContent({
             onChange={(e) =>
               setFilter("on_sale", e.target.checked ? "true" : null)
             }
-            className="rounded border-gray-300"
+            className="rounded border-input"
           />
           <span className="text-sm">On sale</span>
         </label>
@@ -172,7 +172,7 @@ function FilterContent({
             onChange={(e) =>
               setFilter("is_featured", e.target.checked ? "true" : null)
             }
-            className="rounded border-gray-300"
+            className="rounded border-input"
           />
           <span className="text-sm">Featured</span>
         </label>
@@ -236,7 +236,7 @@ export function FilterSidebar(props: FilterSidebarProps) {
               className="absolute inset-0 bg-black/40"
               onClick={() => setMobileOpen(false)}
             />
-            <div className="relative ml-auto flex h-full w-80 max-w-[85vw] flex-col bg-white shadow-xl">
+            <div className="relative ml-auto flex h-full w-80 max-w-[85vw] flex-col bg-card shadow-xl">
               <div className="flex items-center justify-between border-b px-4 py-3">
                 <span className="font-semibold">Filters</span>
                 <Button

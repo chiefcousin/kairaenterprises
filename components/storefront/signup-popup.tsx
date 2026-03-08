@@ -52,7 +52,7 @@ export function SignupPopup() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="relative w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
+      <div className="relative w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl">
         {!done ? (
           <>
             <div className="mb-5 text-center">

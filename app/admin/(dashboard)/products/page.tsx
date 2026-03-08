@@ -62,25 +62,25 @@ export default async function AdminProductsPage({
 
       {/* Product counts */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Total Products</p>
           <p className="text-2xl font-bold">{total}</p>
         </div>
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Active</p>
           <p className="text-2xl font-bold text-green-600">{active}</p>
         </div>
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Draft</p>
-          <p className="text-2xl font-bold text-gray-500">{draft}</p>
+          <p className="text-2xl font-bold text-muted-foreground">{draft}</p>
         </div>
-        <div className="rounded-lg border bg-white p-4">
+        <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Out of Stock</p>
           <p className="text-2xl font-bold text-red-600">{outOfStock}</p>
         </div>
       </div>
 
-      <div className="rounded-lg border bg-white">
+      <div className="rounded-lg border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

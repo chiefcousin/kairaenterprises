@@ -26,6 +26,29 @@
     --radius: 0.5rem;
     --whatsapp: 142 70% 45%;
   }
+
+  .dark {
+    --background: 222 47% 6%;
+    --foreground: 210 40% 96%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 50 100% 50%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 33 100% 50%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 222 47% 14%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 33 100% 50%;
+    --accent-foreground: 210 40% 96%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 222 30% 18%;
+    --input: 222 30% 18%;
+    --ring: 50 100% 50%;
+    --whatsapp: 142 70% 45%;
+  }
 }
 
 @layer base {

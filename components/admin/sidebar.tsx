@@ -18,6 +18,7 @@ import {
   Contact,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { UserRole } from "@/lib/roles";
 
 interface NavItem {
@@ -57,7 +58,7 @@ export function AdminSidebar() {
   );
 
   return (
-    <aside className="flex w-60 flex-col border-r bg-white">
+    <aside className="flex w-60 flex-col border-r bg-background">
       <div className="flex h-16 items-center gap-2 border-b px-4">
         <Package2 className="h-6 w-6 text-primary" />
         <span className="font-bold">Kaira Admin</span>
@@ -85,10 +86,11 @@ export function AdminSidebar() {
         })}
       </nav>
       <div className="border-t p-3">
-        <div className="mb-2 px-3">
+        <div className="mb-2 flex items-center justify-between px-3">
           <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium capitalize text-muted-foreground">
             {role}
           </span>
+          <ThemeToggle />
         </div>
         <Button
           variant="ghost"

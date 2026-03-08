@@ -2,10 +2,11 @@ import Link from "next/link";
 import { Package, User } from "lucide-react";
 import { CategoryNav } from "./category-nav";
 import { SearchBar } from "./search-bar";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export function StorefrontHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b bg-white">
+    <header className="sticky top-0 z-50 border-b bg-background">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
           <Package className="h-7 w-7 text-primary" />
@@ -21,6 +22,7 @@ export function StorefrontHeader() {
           >
             All Toys
           </Link>
+          <ThemeToggle />
           <Link
             href="/profile"
             className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary transition-colors hover:bg-primary hover:text-primary-foreground"

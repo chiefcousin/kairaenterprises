@@ -123,7 +123,7 @@ export default function StaffPage() {
   const roleColor = (role: string) => {
     if (role === "admin") return "bg-purple-100 text-purple-700";
     if (role === "partner") return "bg-blue-100 text-blue-700";
-    return "bg-gray-100 text-gray-700";
+    return "bg-muted text-muted-foreground";
   };
 
   return (
@@ -156,7 +156,7 @@ export default function StaffPage() {
               <p className="text-muted-foreground">Full access to products, orders, customers, and settings. Cannot remove users. Can invite staff.</p>
             </div>
             <div className="flex items-start gap-2">
-              <Badge className="bg-gray-100 text-gray-700 shrink-0 mt-0.5">Staff</Badge>
+              <Badge className="bg-muted text-muted-foreground shrink-0 mt-0.5">Staff</Badge>
               <p className="text-muted-foreground">View-only access. Cannot edit products, orders, or any data.</p>
             </div>
           </div>

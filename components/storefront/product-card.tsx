@@ -11,7 +11,7 @@ export function ProductCard({ product }: { product: ProductWithPrimaryImage }) {
 
   return (
     <Link href={`/products/${product.slug}`} className="group block">
-      <div className="overflow-hidden rounded-lg border bg-white transition-shadow hover:shadow-md">
+      <div className="overflow-hidden rounded-lg border bg-card transition-shadow hover:shadow-md">
         <div className="relative aspect-square bg-muted">
           {primaryImage ? (
             <Image

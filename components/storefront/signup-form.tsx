@@ -39,7 +39,7 @@ export function SignupForm() {
   }
 
   return (
-    <div className="rounded-2xl bg-white p-8 shadow-2xl">
+    <div className="rounded-2xl bg-card p-8 shadow-2xl">
       <div className="mb-6 text-center">
         <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
           <User className="h-6 w-6 text-primary" />

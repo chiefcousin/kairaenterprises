@@ -35,7 +35,7 @@ export function MobileWhatsAppBar({
   if (disabled) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-white p-3 shadow-lg md:hidden">
+    <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background p-3 shadow-lg md:hidden">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs text-muted-foreground">{product.name}</p>

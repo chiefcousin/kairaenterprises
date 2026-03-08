@@ -80,7 +80,7 @@ export default function AdminInventoryPage() {
         ))}
       </div>
 
-      <div className="rounded-lg border bg-white">
+      <div className="rounded-lg border bg-card">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/50">

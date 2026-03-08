@@ -185,7 +185,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Main Info */}
         <div className="space-y-4 lg:col-span-2">
-          <div className="rounded-lg border bg-white p-6 space-y-4">
+          <div className="rounded-lg border bg-card p-6 space-y-4">
             <h2 className="font-semibold">Product Information</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2 space-y-2">
@@ -217,7 +217,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
             </div>
           </div>
 
-          <div className="rounded-lg border bg-white p-6 space-y-4">
+          <div className="rounded-lg border bg-card p-6 space-y-4">
             <h2 className="font-semibold">Images (up to 4)</h2>
             <ImageUploader images={imageUrls} onChange={setImageUrls} />
             {imageUrls.length >= 4 && (
@@ -226,7 +226,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
           </div>
 
           {/* Video Upload */}
-          <div className="rounded-lg border bg-white p-6 space-y-4">
+          <div className="rounded-lg border bg-card p-6 space-y-4">
             <div>
               <h2 className="font-semibold">Product Video</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -282,7 +282,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
             )}
           </div>
 
-          <div className="rounded-lg border bg-white p-6 space-y-4">
+          <div className="rounded-lg border bg-card p-6 space-y-4">
             <h2 className="font-semibold">Pricing & Inventory</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
@@ -332,7 +332,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
 
         {/* Sidebar */}
         <div className="space-y-4">
-          <div className="rounded-lg border bg-white p-6 space-y-4">
+          <div className="rounded-lg border bg-card p-6 space-y-4">
             <h2 className="font-semibold">Organization</h2>
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
@@ -385,7 +385,7 @@ export function ProductForm({ product, categories }: ProductFormProps) {
             </div>
           </div>
 
-          <div className="rounded-lg border bg-white p-6 space-y-4">
+          <div className="rounded-lg border bg-card p-6 space-y-4">
             <h2 className="font-semibold">Visibility</h2>
             <label className="flex items-center gap-2">
               <input

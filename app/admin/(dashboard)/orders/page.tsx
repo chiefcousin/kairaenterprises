@@ -85,7 +85,7 @@ export default function AdminOrdersPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">WhatsApp Orders</h1>
         {isReadOnly && (
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600">
+          <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium text-muted-foreground">
             View only
           </span>
         )}
@@ -112,7 +112,7 @@ export default function AdminOrdersPage() {
         ))}
       </div>
 
-      <div className="rounded-lg border bg-white">
+      <div className="rounded-lg border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

@@ -25,6 +25,7 @@ import {
   Contact,
   Phone,
   MapPin,
+  ShieldBan,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useUserRole } from "@/components/admin/role-context";
@@ -40,6 +41,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [blockingId, setBlockingId] = useState<string | null>(null);
 
   // Add form state
   const [addName, setAddName] = useState("");
@@ -146,6 +148,38 @@ export default function CustomersPage() {
     }
   }
 
+  async function handleBlock(customer: Customer) {
+    if (
+      !confirm(
+        `Block ${customer.name} (${customer.phone})? They will not be able to log in again.`
+      )
+    )
+      return;
+    setBlockingId(customer.id);
+    try {
+      const res = await fetch("/api/admin/blocked-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: customer.phone }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to block");
+      toast({
+        title: "Customer blocked",
+        description: `${customer.name} has been blocked and can no longer log in.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Error",
+        description:
+          err instanceof Error ? err.message : "Failed to block customer",
+        variant: "destructive",
+      });
+    } finally {
+      setBlockingId(null);
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -244,6 +278,22 @@ export default function CustomersPage() {
                         <MessageCircle className="h-4 w-4" />
                       </a>
                     </Button>
+                    {canDelete && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-orange-600 hover:text-orange-700"
+                        onClick={() => handleBlock(customer)}
+                        disabled={blockingId === customer.id}
+                        title="Block user"
+                      >
+                        {blockingId === customer.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <ShieldBan className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
                     {canDelete && (
                       <Button
                         variant="ghost"

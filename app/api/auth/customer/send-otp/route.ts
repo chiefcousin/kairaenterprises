@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isBlocked } from "@/lib/blocked-users";
 
 function generateOTP(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -14,6 +15,15 @@ export async function POST(request: NextRequest) {
   }
 
   const cleanPhone = phone.trim().replace(/\s+/g, "");
+
+  // Check if this phone number is blocked
+  const blocked = await isBlocked({ phone: cleanPhone });
+  if (blocked) {
+    return NextResponse.json(
+      { error: "This account has been blocked. Please contact support." },
+      { status: 403 }
+    );
+  }
   const otp = generateOTP();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
 

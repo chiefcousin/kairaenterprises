@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { User, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,11 +9,15 @@ import { Label } from "@/components/ui/label";
 import { playWelcomeGreeting } from "@/lib/welcome-sound";
 
 export function SignupForm() {
+  const searchParams = useSearchParams();
+  const isBlocked = searchParams.get("blocked") === "1";
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("+91");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    isBlocked ? "Your account has been blocked. Please contact support." : ""
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

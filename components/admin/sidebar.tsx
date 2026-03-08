@@ -16,6 +16,7 @@ import {
   BarChart2,
   Users,
   Contact,
+  ShieldBan,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
   { href: "/admin/orders", label: "Orders", icon: MessageCircle },
   { href: "/admin/inventory", label: "Inventory", icon: Boxes },
   { href: "/admin/customers", label: "Customers", icon: Contact, roles: ["admin", "partner"] },
+  { href: "/admin/blocked-users", label: "Blocked Users", icon: ShieldBan, roles: ["admin"] },
   { href: "/admin/staff", label: "Staff", icon: Users, roles: ["admin", "partner"] },
   { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["admin", "partner"] },
 ];

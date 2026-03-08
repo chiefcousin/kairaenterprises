@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Package } from "lucide-react";
@@ -22,7 +23,9 @@ export default function SignupPage() {
           </Link>
         </div>
 
-        <SignupForm />
+        <Suspense>
+          <SignupForm />
+        </Suspense>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
           By signing up you agree to our{" "}

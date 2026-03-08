@@ -4,12 +4,28 @@ import { NextResponse, type NextRequest } from "next/server";
 // Routes that staff (view-only) and partner roles can access
 const RESTRICTED_ALLOWED = ["/admin", "/admin/orders"];
 
+async function isPhoneBlocked(phone: string): Promise<boolean> {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/blocked_users?phone=eq.${encodeURIComponent(phone)}&select=id&limit=1`,
+    {
+      headers: {
+        apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+      },
+    }
+  );
+  if (!res.ok) return false;
+  const data = await res.json();
+  return Array.isArray(data) && data.length > 0;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // ── Customer signup gate (storefront routes) ──────────────────────
   if (!pathname.startsWith("/admin")) {
-    const hasCustomerCookie = request.cookies.has("ka_customer");
+    const customerCookie = request.cookies.get("ka_customer");
+    const hasCustomerCookie = !!customerCookie;
 
     // Already registered → redirect away from /signup
     if (pathname === "/signup") {
@@ -22,6 +38,18 @@ export async function middleware(request: NextRequest) {
     // All other storefront routes require signup
     if (!hasCustomerCookie) {
       return NextResponse.redirect(new URL("/signup", request.url));
+    }
+
+    // Check if the customer's phone is blocked
+    const phone = customerCookie.value;
+    if (phone) {
+      const blocked = await isPhoneBlocked(phone);
+      if (blocked) {
+        // Clear the cookie and redirect to signup with blocked message
+        const response = NextResponse.redirect(new URL("/signup?blocked=1", request.url));
+        response.cookies.delete("ka_customer");
+        return response;
+      }
     }
 
     return NextResponse.next();

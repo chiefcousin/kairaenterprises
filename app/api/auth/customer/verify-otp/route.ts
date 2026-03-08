@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isBlocked } from "@/lib/blocked-users";
 
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
@@ -11,6 +12,15 @@ export async function POST(request: NextRequest) {
   }
 
   const cleanPhone = phone.trim().replace(/\s+/g, "");
+
+  // Check if this phone number is blocked
+  const blocked = await isBlocked({ phone: cleanPhone });
+  if (blocked) {
+    return NextResponse.json(
+      { error: "This account has been blocked. Please contact support." },
+      { status: 403 }
+    );
+  }
   const supabase = createAdminClient();
 
   const { data: customer, error } = await supabase

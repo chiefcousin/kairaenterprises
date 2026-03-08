@@ -31,20 +31,20 @@ export function mapZohoItemToProduct(item: ZohoItem) {
     price: item.rate,
     compare_at_price,
     sku: item.sku ?? null,
-    stock_quantity: item.actual_available_stock ?? 0,
+    stock_quantity: Math.round(item.actual_available_stock ?? 0),
     zoho_item_id: item.item_id,
     last_synced_from_zoho: new Date().toISOString(),
     is_active: item.status === "active",
   };
 }
 
-/** Generates a URL-safe slug. Appends last 6 chars of item_id for uniqueness. */
+/** Generates a URL-safe slug. Appends the full item_id for guaranteed uniqueness. */
 function generateSlug(name: string, itemId: string): string {
   const base = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return `${base}-${itemId.slice(-6)}`;
+  return `${base}-${itemId}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,19 +177,56 @@ async function resolveCategory(
   return created.id;
 }
 
-/** Loads all existing products that have a zoho_item_id, keyed by zoho_item_id */
+/** Loads all existing products that have a zoho_item_id, keyed by zoho_item_id.
+ *  Paginates past Supabase's default 1000-row limit. */
 async function loadExistingProductsByZohoId(
   supabase: ReturnType<typeof createAdminClient>
-): Promise<Map<string, { id: string; category_id: string | null }>> {
-  const map = new Map<string, { id: string; category_id: string | null }>();
-  const { data } = await supabase
-    .from("products")
-    .select("id, zoho_item_id, category_id")
-    .not("zoho_item_id", "is", null);
-  for (const row of data ?? []) {
-    map.set(row.zoho_item_id, { id: row.id, category_id: row.category_id });
+): Promise<Map<string, { id: string; slug: string; category_id: string | null }>> {
+  const map = new Map<string, { id: string; slug: string; category_id: string | null }>();
+  const PAGE_SIZE = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data } = await supabase
+      .from("products")
+      .select("id, zoho_item_id, slug, category_id")
+      .not("zoho_item_id", "is", null)
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (!data || data.length === 0) break;
+
+    for (const row of data) {
+      map.set(row.zoho_item_id, { id: row.id, slug: row.slug, category_id: row.category_id });
+    }
+
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
   }
+
   return map;
+}
+
+/** Loads all existing product slugs to prevent duplicates on insert. */
+async function loadAllSlugs(
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<Set<string>> {
+  const slugs = new Set<string>();
+  const PAGE_SIZE = 1000;
+  let from = 0;
+
+  while (true) {
+    const { data } = await supabase
+      .from("products")
+      .select("slug")
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (!data || data.length === 0) break;
+    for (const row of data) slugs.add(row.slug);
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return slugs;
 }
 
 /** Deletes all categories that have zero products assigned to them. */
@@ -234,17 +271,16 @@ async function deleteEmptyCategories(
  */
 function processItemBatch(
   items: ZohoItem[],
-  existingProducts: Map<string, { id: string; category_id: string | null }>,
+  existingProducts: Map<string, { id: string; slug: string; category_id: string | null }>,
+  existingSlugs: Set<string>,
   categoryMap: CategoryMap,
   errors: string[]
 ): {
   toUpdate: Record<string, unknown>[];
   toInsert: Record<string, unknown>[];
-  newCategories: { item: ZohoItem; key: string; rawLabel: string }[];
 } {
   const toUpdate: Record<string, unknown>[] = [];
   const toInsert: Record<string, unknown>[] = [];
-  const newCategories: { item: ZohoItem; key: string; rawLabel: string }[] = [];
 
   for (const item of items) {
     try {
@@ -256,16 +292,13 @@ function processItemBatch(
       const existingCat = catKey ? categoryMap.get(catKey) : undefined;
       const categoryId = existingCat?.id ?? null;
 
-      // Track new categories we need to create
-      if (catKey && !existingCat) {
-        newCategories.push({ item, key: catKey, rawLabel });
-      }
-
       const existing = existingProducts.get(item.item_id);
 
       if (existing) {
+        // Update: include the existing slug so upsert doesn't violate NOT NULL
         toUpdate.push({
           id: existing.id,
+          slug: existing.slug,
           name: productData.name,
           description: productData.description,
           price: productData.price,
@@ -280,7 +313,15 @@ function processItemBatch(
             : {}),
         });
       } else {
-        const slug = generateSlug(item.name, item.item_id);
+        // New product: generate a unique slug
+        let slug = generateSlug(item.name, item.item_id);
+        let suffix = 2;
+        while (existingSlugs.has(slug)) {
+          slug = `${generateSlug(item.name, item.item_id)}-${suffix}`;
+          suffix++;
+        }
+        existingSlugs.add(slug);
+
         toInsert.push({
           ...productData,
           slug,
@@ -293,7 +334,7 @@ function processItemBatch(
     }
   }
 
-  return { toUpdate, toInsert, newCategories };
+  return { toUpdate, toInsert };
 }
 
 /**
@@ -317,10 +358,11 @@ export async function syncProductsFromZoho(): Promise<SyncResult> {
   const supabase = createAdminClient();
 
   try {
-    // Load categories and existing products in parallel
-    const [categoryMap, existingProducts] = await Promise.all([
+    // Load categories, existing products, and all slugs in parallel
+    const [categoryMap, existingProducts, existingSlugs] = await Promise.all([
       loadCategoryMap(supabase),
       loadExistingProductsByZohoId(supabase),
+      loadAllSlugs(supabase),
     ]);
 
     // Process page by page — fetch, transform, write, then next page
@@ -377,6 +419,7 @@ export async function syncProductsFromZoho(): Promise<SyncResult> {
       const { toUpdate, toInsert } = processItemBatch(
         items,
         existingProducts,
+        existingSlugs,
         categoryMap,
         result.errors
       );

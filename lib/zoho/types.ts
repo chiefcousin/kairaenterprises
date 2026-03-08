@@ -26,6 +26,9 @@ export interface ZohoItem {
   custom_fields?: ZohoCustomField[];
   image_document_id?: string;
   tags?: ZohoTag[];
+  // Item group name from Zoho — used for auto-categorization
+  group_name?: string;
+  category_name?: string;
 }
 
 export interface ZohoItemsResponse {
@@ -87,5 +90,8 @@ export interface SyncResult {
   total: number;
   created: number;
   updated: number;
+  categorized?: number;
+  categories_created?: number;
+  categories_deleted?: number;
   errors: string[];
 }

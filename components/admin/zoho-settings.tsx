@@ -54,6 +54,7 @@ export function ZohoSettings({
     total: number;
     created: number;
     updated: number;
+    categories_deleted?: number;
     errors: string[];
   } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(initialSyncError);
@@ -337,6 +338,11 @@ export function ZohoSettings({
                 {syncResult.total} items from Zoho —{" "}
                 <strong>{syncResult.created}</strong> created,{" "}
                 <strong>{syncResult.updated}</strong> updated
+                {(syncResult.categories_deleted ?? 0) > 0 && (
+                  <span className="text-green-700">
+                    , {syncResult.categories_deleted} empty categories removed
+                  </span>
+                )}
                 {syncResult.errors.length > 0 && (
                   <span className="text-red-700">
                     , {syncResult.errors.length} errors

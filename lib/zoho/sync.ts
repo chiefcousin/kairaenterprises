@@ -108,13 +108,116 @@ async function setLastSyncAt() {
 }
 
 // ---------------------------------------------------------------------------
+// Auto-categorization helpers
+// ---------------------------------------------------------------------------
+
+type CategoryMap = Map<string, { id: string; name: string }>;
+
+/** Builds a lookup map of lowercase category name → { id, name } */
+async function loadCategoryMap(
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<CategoryMap> {
+  const { data } = await supabase
+    .from("categories")
+    .select("id, name")
+    .order("sort_order");
+  const map: CategoryMap = new Map();
+  for (const cat of data ?? []) {
+    map.set(cat.name.toLowerCase(), { id: cat.id, name: cat.name });
+  }
+  return map;
+}
+
+/** Generate a category slug from a name */
+function categorySlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Resolves a category_id for a Zoho item.
+ * 1. Uses group_name or category_name from Zoho as the category label.
+ * 2. Matches against existing categories (case-insensitive).
+ * 3. Creates a new category if no match is found.
+ * Returns the category_id or null if no category info is available.
+ */
+async function resolveCategory(
+  item: ZohoItem,
+  categoryMap: CategoryMap,
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<string | null> {
+  // Prefer group_name, fall back to category_name
+  const rawLabel = (item.group_name || item.category_name || "").trim();
+  if (!rawLabel) return null;
+
+  const key = rawLabel.toLowerCase();
+
+  // Check if category already exists
+  const existing = categoryMap.get(key);
+  if (existing) return existing.id;
+
+  // Create new category
+  const slug = categorySlug(rawLabel);
+  const { data: created, error } = await supabase
+    .from("categories")
+    .insert({
+      name: rawLabel,
+      slug,
+      sort_order: categoryMap.size + 1,
+    })
+    .select("id, name")
+    .single();
+
+  if (error || !created) return null;
+
+  // Update the in-memory map so subsequent items can find it
+  categoryMap.set(key, { id: created.id, name: created.name });
+  return created.id;
+}
+
+/** Deletes all categories that have zero products assigned to them. */
+async function deleteEmptyCategories(
+  supabase: ReturnType<typeof createAdminClient>
+): Promise<number> {
+  // Fetch all categories
+  const { data: allCategories } = await supabase
+    .from("categories")
+    .select("id");
+  if (!allCategories?.length) return 0;
+
+  // Fetch distinct category_ids that are in use
+  const { data: usedRows } = await supabase
+    .from("products")
+    .select("category_id")
+    .not("category_id", "is", null);
+
+  const usedIds = new Set((usedRows ?? []).map((r) => r.category_id));
+
+  const emptyIds = allCategories
+    .map((c) => c.id)
+    .filter((id) => !usedIds.has(id));
+
+  if (emptyIds.length === 0) return 0;
+
+  const { error } = await supabase
+    .from("categories")
+    .delete()
+    .in("id", emptyIds);
+
+  return error ? 0 : emptyIds.length;
+}
+
+// ---------------------------------------------------------------------------
 // Public sync functions
 // ---------------------------------------------------------------------------
 
 /**
  * Full sync: fetches all items from Zoho and upserts them into the products table.
  * Existing products are updated (Zoho-owned fields only).
- * New items create new product rows with an auto-generated slug.
+ * New items create new product rows with an auto-generated slug and auto-assigned category.
+ * After sync, empty categories are cleaned up.
  */
 export async function syncProductsFromZoho(): Promise<SyncResult> {
   const result: SyncResult = {
@@ -131,37 +234,56 @@ export async function syncProductsFromZoho(): Promise<SyncResult> {
     const items = await fetchAllZohoItems();
     result.total = items.length;
 
+    // Load categories once for efficient lookups during the sync loop
+    const categoryMap = await loadCategoryMap(supabase);
+
     for (const item of items) {
       try {
         const productData = mapZohoItemToProduct(item);
 
         const { data: existing } = await supabase
           .from("products")
-          .select("id, slug")
+          .select("id, slug, category_id")
           .eq("zoho_item_id", item.item_id)
           .maybeSingle();
 
         if (existing) {
-          // Update only Zoho-owned fields; leave slug, category, etc. untouched
+          // Update Zoho-owned fields; re-categorize only if product has no category
+          const updatePayload: Record<string, unknown> = {
+            name: productData.name,
+            description: productData.description,
+            price: productData.price,
+            compare_at_price: productData.compare_at_price,
+            sku: productData.sku,
+            stock_quantity: productData.stock_quantity,
+            is_active: productData.is_active,
+            last_synced_from_zoho: productData.last_synced_from_zoho,
+          };
+
+          // Auto-assign category if product is uncategorized
+          if (!existing.category_id) {
+            const categoryId = await resolveCategory(item, categoryMap, supabase);
+            if (categoryId) {
+              updatePayload.category_id = categoryId;
+            }
+          }
+
           await supabase
             .from("products")
-            .update({
-              name: productData.name,
-              description: productData.description,
-              price: productData.price,
-              compare_at_price: productData.compare_at_price,
-              sku: productData.sku,
-              stock_quantity: productData.stock_quantity,
-              is_active: productData.is_active,
-              last_synced_from_zoho: productData.last_synced_from_zoho,
-            })
+            .update(updatePayload)
             .eq("id", existing.id);
           result.updated++;
         } else {
+          // New product: auto-assign category from Zoho group/category
+          const categoryId = await resolveCategory(item, categoryMap, supabase);
           const slug = generateSlug(item.name, item.item_id);
           const { error: insertError } = await supabase
             .from("products")
-            .insert({ ...productData, slug });
+            .insert({
+              ...productData,
+              slug,
+              ...(categoryId ? { category_id: categoryId } : {}),
+            });
           if (insertError) {
             result.errors.push(
               `Failed to insert "${item.name}": ${insertError.message}`
@@ -176,6 +298,10 @@ export async function syncProductsFromZoho(): Promise<SyncResult> {
         result.errors.push(`Item ${item.item_id}: ${msg}`);
       }
     }
+
+    // Clean up empty categories after sync
+    const deletedCount = await deleteEmptyCategories(supabase);
+    result.categories_deleted = deletedCount;
 
     await setLastSyncAt();
     await setSyncStatus("idle");
@@ -217,29 +343,45 @@ export async function syncSingleItemFromZoho(zohoItemId: string): Promise<void> 
   const item = json.item;
   const productData = mapZohoItemToProduct(item);
   const supabase = createAdminClient();
+  const categoryMap = await loadCategoryMap(supabase);
 
   const { data: existing } = await supabase
     .from("products")
-    .select("id")
+    .select("id, category_id")
     .eq("zoho_item_id", zohoItemId)
     .maybeSingle();
 
   if (existing) {
+    const updatePayload: Record<string, unknown> = {
+      name: productData.name,
+      description: productData.description,
+      price: productData.price,
+      compare_at_price: productData.compare_at_price,
+      sku: productData.sku,
+      stock_quantity: productData.stock_quantity,
+      is_active: productData.is_active,
+      last_synced_from_zoho: productData.last_synced_from_zoho,
+    };
+
+    // Auto-assign category if product is uncategorized
+    if (!existing.category_id) {
+      const categoryId = await resolveCategory(item, categoryMap, supabase);
+      if (categoryId) {
+        updatePayload.category_id = categoryId;
+      }
+    }
+
     await supabase
       .from("products")
-      .update({
-        name: productData.name,
-        description: productData.description,
-        price: productData.price,
-        compare_at_price: productData.compare_at_price,
-        sku: productData.sku,
-        stock_quantity: productData.stock_quantity,
-        is_active: productData.is_active,
-        last_synced_from_zoho: productData.last_synced_from_zoho,
-      })
+      .update(updatePayload)
       .eq("id", existing.id);
   } else {
+    const categoryId = await resolveCategory(item, categoryMap, supabase);
     const slug = generateSlug(item.name, item.item_id);
-    await supabase.from("products").insert({ ...productData, slug });
+    await supabase.from("products").insert({
+      ...productData,
+      slug,
+      ...(categoryId ? { category_id: categoryId } : {}),
+    });
   }
 }

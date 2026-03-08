@@ -17,7 +17,7 @@ export function ProductJsonLd({ product }: { product: ProductWithImages }) {
     offers: {
       "@type": "Offer",
       price: product.price,
-      priceCurrency: "USD",
+      priceCurrency: "INR",
       availability:
         product.stock_quantity > 0
           ? "https://schema.org/InStock"

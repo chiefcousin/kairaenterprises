@@ -45,7 +45,7 @@ export default async function AnalyticsPage() {
   const topByClicks = [...analytics].sort((a, b) => b.clicks - a.clicks).slice(0, 10);
 
   const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(amount);
+    new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(amount);
 
   return (
     <div className="space-y-8">

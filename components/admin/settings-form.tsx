@@ -17,7 +17,7 @@ export function SettingsForm({ settings }: { settings: Record<string, string> })
     whatsapp_number: settings.whatsapp_number || "",
     hero_title: settings.hero_title || "Welcome to Kaira Enterprises",
     hero_subtitle: settings.hero_subtitle || "Your favorite local toy store - browse online, order via WhatsApp!",
-    currency: settings.currency || "USD",
+    currency: settings.currency || "INR",
     store_address: settings.store_address || "",
     store_email: settings.store_email || "",
     footer_text: settings.footer_text || "© 2026 Kaira Enterprises. All rights reserved.",
@@ -119,11 +119,11 @@ export function SettingsForm({ settings }: { settings: Record<string, string> })
             id="currency"
             value={formData.currency}
             onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-            placeholder="USD"
+            placeholder="INR"
             maxLength={3}
           />
           <p className="text-sm text-muted-foreground">
-            3-letter currency code (e.g., USD, NGN, EUR)
+            3-letter currency code (e.g., INR, USD, EUR)
           </p>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { Package, MapPin, Mail, ExternalLink } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { getStoreSettings } from "@/lib/store-settings";
 
@@ -109,6 +110,18 @@ export async function StorefrontFooter() {
         {/* Bottom bar */}
         <div className="mt-8 border-t pt-6 text-center text-sm text-muted-foreground">
           {footerText}
+        </div>
+
+        {/* Branding */}
+        <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+          <span>Powered by</span>
+          <Image
+            src="/SuperCousins_Logo_Black.png"
+            alt="SuperCousins"
+            width={100}
+            height={24}
+            className="dark:invert"
+          />
         </div>
       </div>
     </footer>

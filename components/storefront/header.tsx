@@ -1,18 +1,21 @@
 import Link from "next/link";
-import { Package, User } from "lucide-react";
+import { Package } from "lucide-react";
 import { CategoryNav } from "./category-nav";
+import { MobileMenu } from "./mobile-menu";
 import { SearchBar } from "./search-bar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { User } from "lucide-react";
 
 export function StorefrontHeader() {
   return (
     <header className="sticky top-0 z-50 border-b bg-background">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
+      {/* Desktop header */}
+      <div className="mx-auto hidden h-16 max-w-7xl items-center justify-between px-4 md:flex">
         <Link href="/" className="flex items-center gap-2">
           <Package className="h-7 w-7 text-primary" />
           <span className="text-xl font-bold tracking-tight">Kaira Enterprises</span>
         </Link>
-        <div className="hidden flex-1 px-8 md:block">
+        <div className="flex-1 px-8">
           <SearchBar />
         </div>
         <div className="flex items-center gap-4">
@@ -32,11 +35,10 @@ export function StorefrontHeader() {
           </Link>
         </div>
       </div>
-      <div className="border-t md:hidden">
-        <div className="mx-auto max-w-7xl px-4 py-2">
-          <SearchBar />
-        </div>
-      </div>
+
+      {/* Mobile header */}
+      <MobileMenu />
+
       <CategoryNav />
     </header>
   );

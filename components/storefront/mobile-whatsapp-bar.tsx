@@ -35,20 +35,20 @@ export function MobileWhatsAppBar({
   if (disabled) return null;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background p-3 shadow-lg md:hidden">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-xs text-muted-foreground">{product.name}</p>
+    <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-lg md:hidden">
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs text-muted-foreground">{product.name}</p>
           <p className="font-bold text-primary">
             {formatPrice(product.price)}
           </p>
         </div>
         <button
           onClick={handleOrder}
-          className="flex items-center gap-2 rounded-lg bg-[hsl(142,70%,45%)] px-6 py-3 font-medium text-white"
+          className="flex shrink-0 items-center gap-2 rounded-lg bg-[hsl(142,70%,45%)] px-4 py-3 text-sm font-medium text-white sm:px-6 sm:text-base"
         >
           <MessageCircle className="h-5 w-5" />
-          Order via WhatsApp
+          <span className="hidden sm:inline">Order via </span>WhatsApp
         </button>
       </div>
     </div>

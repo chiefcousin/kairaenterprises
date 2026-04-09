@@ -23,9 +23,9 @@ export function MobileMenu() {
           >
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
-          <Link href="/" className="flex items-center gap-2">
-            <Package className="h-6 w-6 text-primary" />
-            <span className="text-lg font-bold tracking-tight">Kaira Enterprises</span>
+          <Link href="/" className="flex min-w-0 items-center gap-2">
+            <Package className="h-6 w-6 shrink-0 text-primary" />
+            <span className="truncate text-lg font-bold tracking-tight">Kaira Enterprises</span>
           </Link>
         </div>
         <Link

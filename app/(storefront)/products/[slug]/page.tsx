@@ -79,17 +79,17 @@ export default async function ProductDetailPage({
       <ProductJsonLd product={typedProduct} />
 
       {/* Breadcrumb */}
-      <nav className="mb-6 text-sm text-muted-foreground">
+      <nav className="mb-6 flex flex-wrap items-center gap-1 text-sm text-muted-foreground">
         <Link href="/" className="hover:text-foreground">
           Home
         </Link>
-        <span className="mx-2">/</span>
+        <span>/</span>
         <Link href="/products" className="hover:text-foreground">
           Products
         </Link>
         {typedProduct.categories && (
           <>
-            <span className="mx-2">/</span>
+            <span>/</span>
             <Link
               href={`/categories/${typedProduct.categories.slug}`}
               className="hover:text-foreground"
@@ -98,8 +98,8 @@ export default async function ProductDetailPage({
             </Link>
           </>
         )}
-        <span className="mx-2">/</span>
-        <span className="text-foreground">{typedProduct.name}</span>
+        <span>/</span>
+        <span className="truncate text-foreground">{typedProduct.name}</span>
       </nav>
 
       <div className="grid gap-8 md:grid-cols-2">
@@ -114,11 +114,11 @@ export default async function ProductDetailPage({
                 {typedProduct.brand}
               </p>
             )}
-            <h1 className="text-3xl font-bold">{typedProduct.name}</h1>
+            <h1 className="text-2xl font-bold sm:text-3xl">{typedProduct.name}</h1>
           </div>
 
           <div className="flex items-baseline gap-3">
-            <span className="text-3xl font-bold text-primary">
+            <span className="text-2xl font-bold text-primary sm:text-3xl">
               {formatPrice(typedProduct.price)}
             </span>
             {hasDiscount && (

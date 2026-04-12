@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
   const name = body?.name as string | undefined;
   const phone = body?.phone as string | undefined;
   const address = body?.address as string | undefined;
+  const businessName = body?.business_name as string | undefined;
 
   if (!name || !name.trim()) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
@@ -70,7 +71,9 @@ export async function POST(request: NextRequest) {
       phone: cleanPhone,
       name: name.trim(),
       address: address?.trim() || null,
+      business_name: businessName?.trim() || null,
       is_verified: true,
+      approval_status: "approved",
     },
     { onConflict: "phone" }
   );

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/admin/notifications";
 import {
   Sheet,
   SheetContent,
@@ -139,6 +140,9 @@ export function AdminSidebar() {
         </Button>
         <Package2 className="h-5 w-5 text-primary" />
         <span className="font-bold">Kaira Admin</span>
+        <div className="ml-auto">
+          <NotificationBell />
+        </div>
       </div>
 
       {/* Mobile drawer */}
@@ -162,7 +166,8 @@ export function AdminSidebar() {
       <aside className="hidden w-60 flex-col border-r bg-background md:flex">
         <div className="flex h-16 items-center gap-2 border-b px-4">
           <Package2 className="h-6 w-6 text-primary" />
-          <span className="font-bold">Kaira Admin</span>
+          <span className="flex-1 font-bold">Kaira Admin</span>
+          <NotificationBell />
         </div>
         <SidebarContent
           visibleItems={visibleItems}

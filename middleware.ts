@@ -19,6 +19,24 @@ async function isPhoneBlocked(phone: string): Promise<boolean> {
   return Array.isArray(data) && data.length > 0;
 }
 
+async function getCustomerApprovalStatus(phone: string): Promise<string | null> {
+  const res = await fetch(
+    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/customers?phone=eq.${encodeURIComponent(phone)}&select=approval_status&limit=1`,
+    {
+      headers: {
+        apikey: process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY!}`,
+      },
+    }
+  );
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (Array.isArray(data) && data.length > 0) {
+    return data[0].approval_status;
+  }
+  return null;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -27,17 +45,31 @@ export async function middleware(request: NextRequest) {
     const customerCookie = request.cookies.get("ka_customer");
     const hasCustomerCookie = !!customerCookie;
 
-    // Already registered → redirect away from /signup
+    // Already registered → redirect away from /signup (but allow mode=signin)
     if (pathname === "/signup") {
       if (hasCustomerCookie) {
+        // Check approval status before redirecting
+        const phone = customerCookie.value;
+        if (phone) {
+          const status = await getCustomerApprovalStatus(phone);
+          if (status === "approved") {
+            return NextResponse.redirect(new URL("/", request.url));
+          }
+          // If pending/rejected, clear cookie and let them see signup
+          const response = NextResponse.next();
+          if (status !== "approved") {
+            response.cookies.delete("ka_customer");
+          }
+          return response;
+        }
         return NextResponse.redirect(new URL("/", request.url));
       }
       return NextResponse.next();
     }
 
-    // All other storefront routes require signup
+    // All other storefront routes require signup + approval
     if (!hasCustomerCookie) {
-      return NextResponse.redirect(new URL("/signup", request.url));
+      return NextResponse.redirect(new URL("/signup?mode=signin", request.url));
     }
 
     // Check if the customer's phone is blocked
@@ -45,8 +77,15 @@ export async function middleware(request: NextRequest) {
     if (phone) {
       const blocked = await isPhoneBlocked(phone);
       if (blocked) {
-        // Clear the cookie and redirect to signup with blocked message
         const response = NextResponse.redirect(new URL("/signup?blocked=1", request.url));
+        response.cookies.delete("ka_customer");
+        return response;
+      }
+
+      // Check approval status
+      const status = await getCustomerApprovalStatus(phone);
+      if (status && status !== "approved") {
+        const response = NextResponse.redirect(new URL("/signup?mode=signin", request.url));
         response.cookies.delete("ka_customer");
         return response;
       }
@@ -101,7 +140,6 @@ export async function middleware(request: NextRequest) {
   const role = roleRow?.role;
 
   // If no role row exists, the user is treated as a full admin
-  // (the first admin account created directly in Supabase won't have a role row)
   if (!role || role === "admin") {
     return response;
   }

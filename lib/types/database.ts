@@ -75,14 +75,30 @@ export interface StoreSetting {
   updated_at: string;
 }
 
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
 export interface Customer {
   id: string;
   name: string;
   phone: string;
+  email: string | null;
+  business_name: string | null;
   address: string | null;
+  password_hash: string | null;
+  approval_status: ApprovalStatus;
   is_verified: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface AdminNotification {
+  id: string;
+  type: 'signup_request' | 'order' | 'stock_alert' | 'general';
+  title: string;
+  message: string;
+  link: string | null;
+  is_read: boolean;
+  created_at: string;
 }
 
 export interface UserRole {

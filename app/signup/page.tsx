@@ -3,14 +3,23 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Package } from "lucide-react";
 import { SignupForm } from "@/components/storefront/signup-form";
+import { SigninForm } from "@/components/storefront/signin-form";
 
 export const metadata: Metadata = {
   title: "Sign Up - Kaira Enterprises",
   description:
-    "Create your account to browse and order toys from Kaira Enterprises",
+    "Create your business account to browse and order from Kaira Enterprises",
 };
 
-export default function SignupPage() {
+function AuthContent({ mode }: { mode: string | undefined }) {
+  return mode === "signin" ? <SigninForm /> : <SignupForm />;
+}
+
+export default function SignupPage({
+  searchParams,
+}: {
+  searchParams: { mode?: string; blocked?: string };
+}) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-br from-primary/10 via-accent/10 to-primary/5 p-4">
       <div className="w-full max-w-md">
@@ -24,7 +33,7 @@ export default function SignupPage() {
         </div>
 
         <Suspense>
-          <SignupForm />
+          <AuthContent mode={searchParams.mode} />
         </Suspense>
 
         <p className="mt-4 text-center text-xs text-muted-foreground">

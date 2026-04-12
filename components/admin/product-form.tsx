@@ -51,6 +51,12 @@ export function ProductForm({ product, categories }: ProductFormProps) {
   const [imageUrls, setImageUrls] = useState<string[]>(
     product?.product_images?.map((img) => img.url) || []
   );
+  const [costPrice, setCostPrice] = useState(
+    product?.cost_price?.toString() || ""
+  );
+  const [lowStockThreshold, setLowStockThreshold] = useState(
+    product?.low_stock_threshold?.toString() || "5"
+  );
   const [videoUrl, setVideoUrl] = useState<string>(product?.video_url || "");
   const [videoUploading, setVideoUploading] = useState(false);
 
@@ -121,6 +127,8 @@ export function ProductForm({ product, categories }: ProductFormProps) {
         .filter(Boolean),
       is_featured: isFeatured,
       is_active: isActive,
+      cost_price: costPrice ? parseFloat(costPrice) : 0,
+      low_stock_threshold: parseInt(lowStockThreshold, 10) || 5,
       video_url: videoUrl || null,
     };
 
@@ -309,6 +317,18 @@ export function ProductForm({ product, categories }: ProductFormProps) {
                 />
               </div>
               <div className="space-y-2">
+                <Label htmlFor="cost_price">Cost Price</Label>
+                <Input
+                  id="cost_price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={costPrice}
+                  onChange={(e) => setCostPrice(e.target.value)}
+                  placeholder="Purchase/cost price"
+                />
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="sku">SKU</Label>
                 <Input
                   id="sku"
@@ -324,6 +344,17 @@ export function ProductForm({ product, categories }: ProductFormProps) {
                   min="0"
                   value={stockQuantity}
                   onChange={(e) => setStockQuantity(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="low_stock_threshold">Low Stock Alert Threshold</Label>
+                <Input
+                  id="low_stock_threshold"
+                  type="number"
+                  min="0"
+                  value={lowStockThreshold}
+                  onChange={(e) => setLowStockThreshold(e.target.value)}
+                  placeholder="Default: 5"
                 />
               </div>
             </div>

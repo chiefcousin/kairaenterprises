@@ -12,7 +12,7 @@ export default function AdminDashboardLayout({
     <RoleProvider>
       <div className="flex min-h-screen">
         <AdminSidebar />
-        <main className="flex-1 overflow-auto bg-muted/30 p-6">{children}</main>
+        <main className="flex-1 overflow-auto bg-muted/30 p-4 md:p-6">{children}</main>
       </div>
     </RoleProvider>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -17,9 +18,15 @@ import {
   Users,
   Contact,
   ShieldBan,
+  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import type { UserRole } from "@/lib/roles";
 
 interface NavItem {
@@ -43,28 +50,21 @@ const navItems: NavItem[] = [
   { href: "/admin/settings", label: "Settings", icon: Settings, roles: ["admin", "partner"] },
 ];
 
-export function AdminSidebar() {
-  const pathname = usePathname();
-  const router = useRouter();
-  const role = useUserRole();
-
-  async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/admin/login");
-    router.refresh();
-  }
-
-  const visibleItems = navItems.filter(
-    (item) => !item.roles || item.roles.includes(role)
-  );
-
+function SidebarContent({
+  visibleItems,
+  pathname,
+  role,
+  onLogout,
+  onNavClick,
+}: {
+  visibleItems: NavItem[];
+  pathname: string;
+  role: UserRole;
+  onLogout: () => void;
+  onNavClick?: () => void;
+}) {
   return (
-    <aside className="flex w-60 flex-col border-r bg-background">
-      <div className="flex h-16 items-center gap-2 border-b px-4">
-        <Package2 className="h-6 w-6 text-primary" />
-        <span className="font-bold">Kaira Admin</span>
-      </div>
+    <>
       <nav className="flex-1 space-y-1 p-3">
         {visibleItems.map((item) => {
           const isActive =
@@ -75,6 +75,7 @@ export function AdminSidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavClick}
               className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
                 isActive
                   ? "bg-primary/10 text-primary"
@@ -97,12 +98,79 @@ export function AdminSidebar() {
         <Button
           variant="ghost"
           className="w-full justify-start gap-3 text-muted-foreground"
-          onClick={handleLogout}
+          onClick={onLogout}
         >
           <LogOut className="h-4 w-4" />
           Sign Out
         </Button>
       </div>
-    </aside>
+    </>
+  );
+}
+
+export function AdminSidebar() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const role = useUserRole();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  async function handleLogout() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/admin/login");
+    router.refresh();
+  }
+
+  const visibleItems = navItems.filter(
+    (item) => !item.roles || item.roles.includes(role)
+  );
+
+  return (
+    <>
+      {/* Mobile top bar */}
+      <div className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background px-4 md:hidden">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+        <Package2 className="h-5 w-5 text-primary" />
+        <span className="font-bold">Kaira Admin</span>
+      </div>
+
+      {/* Mobile drawer */}
+      <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+        <SheetContent side="left" className="flex w-72 flex-col p-0">
+          <SheetTitle className="flex h-14 items-center gap-2 border-b px-4">
+            <Package2 className="h-6 w-6 text-primary" />
+            <span className="font-bold">Kaira Admin</span>
+          </SheetTitle>
+          <SidebarContent
+            visibleItems={visibleItems}
+            pathname={pathname}
+            role={role}
+            onLogout={handleLogout}
+            onNavClick={() => setMobileOpen(false)}
+          />
+        </SheetContent>
+      </Sheet>
+
+      {/* Desktop sidebar */}
+      <aside className="hidden w-60 flex-col border-r bg-background md:flex">
+        <div className="flex h-16 items-center gap-2 border-b px-4">
+          <Package2 className="h-6 w-6 text-primary" />
+          <span className="font-bold">Kaira Admin</span>
+        </div>
+        <SidebarContent
+          visibleItems={visibleItems}
+          pathname={pathname}
+          role={role}
+          onLogout={handleLogout}
+        />
+      </aside>
+    </>
   );
 }

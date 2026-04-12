@@ -30,6 +30,7 @@ export function mapZohoItemToProduct(item: ZohoItem) {
     description: item.description ?? null,
     price: item.rate,
     compare_at_price,
+    cost_price: item.purchase_rate ?? 0,
     sku: item.sku ?? null,
     stock_quantity: Math.round(item.actual_available_stock ?? 0),
     zoho_item_id: item.item_id,
@@ -181,22 +182,22 @@ async function resolveCategory(
  *  Paginates past Supabase's default 1000-row limit. */
 async function loadExistingProductsByZohoId(
   supabase: ReturnType<typeof createAdminClient>
-): Promise<Map<string, { id: string; slug: string; category_id: string | null }>> {
-  const map = new Map<string, { id: string; slug: string; category_id: string | null }>();
+): Promise<Map<string, { id: string; slug: string; category_id: string | null; stock_quantity: number }>> {
+  const map = new Map<string, { id: string; slug: string; category_id: string | null; stock_quantity: number }>();
   const PAGE_SIZE = 1000;
   let from = 0;
 
   while (true) {
     const { data } = await supabase
       .from("products")
-      .select("id, zoho_item_id, slug, category_id")
+      .select("id, zoho_item_id, slug, category_id, stock_quantity")
       .not("zoho_item_id", "is", null)
       .range(from, from + PAGE_SIZE - 1);
 
     if (!data || data.length === 0) break;
 
     for (const row of data) {
-      map.set(row.zoho_item_id, { id: row.id, slug: row.slug, category_id: row.category_id });
+      map.set(row.zoho_item_id, { id: row.id, slug: row.slug, category_id: row.category_id, stock_quantity: row.stock_quantity });
     }
 
     if (data.length < PAGE_SIZE) break;
@@ -269,18 +270,31 @@ async function deleteEmptyCategories(
  * Processes a batch of Zoho items: resolves categories and prepares upsert/insert rows.
  * Returns the rows separated into updates and inserts.
  */
+interface StockMovementRow {
+  product_id: string;
+  movement_type: string;
+  quantity_change: number;
+  quantity_before: number;
+  quantity_after: number;
+  reference: string | null;
+  notes: string | null;
+  created_by: string | null;
+}
+
 function processItemBatch(
   items: ZohoItem[],
-  existingProducts: Map<string, { id: string; slug: string; category_id: string | null }>,
+  existingProducts: Map<string, { id: string; slug: string; category_id: string | null; stock_quantity: number }>,
   existingSlugs: Set<string>,
   categoryMap: CategoryMap,
   errors: string[]
 ): {
   toUpdate: Record<string, unknown>[];
   toInsert: Record<string, unknown>[];
+  stockMovements: StockMovementRow[];
 } {
   const toUpdate: Record<string, unknown>[] = [];
   const toInsert: Record<string, unknown>[] = [];
+  const stockMovements: StockMovementRow[] = [];
 
   for (const item of items) {
     try {
@@ -295,6 +309,22 @@ function processItemBatch(
       const existing = existingProducts.get(item.item_id);
 
       if (existing) {
+        // Track stock movement if quantity changed
+        const oldQty = existing.stock_quantity;
+        const newQty = productData.stock_quantity;
+        if (oldQty !== newQty) {
+          stockMovements.push({
+            product_id: existing.id,
+            movement_type: "sync_zoho",
+            quantity_change: newQty - oldQty,
+            quantity_before: oldQty,
+            quantity_after: newQty,
+            reference: item.item_id,
+            notes: `Zoho sync: ${oldQty} → ${newQty}`,
+            created_by: null,
+          });
+        }
+
         // Update: include the existing slug so upsert doesn't violate NOT NULL
         toUpdate.push({
           id: existing.id,
@@ -334,7 +364,7 @@ function processItemBatch(
     }
   }
 
-  return { toUpdate, toInsert };
+  return { toUpdate, toInsert, stockMovements };
 }
 
 /**
@@ -416,7 +446,7 @@ export async function syncProductsFromZoho(): Promise<SyncResult> {
       }
 
       // Process items into update/insert rows
-      const { toUpdate, toInsert } = processItemBatch(
+      const { toUpdate, toInsert, stockMovements } = processItemBatch(
         items,
         existingProducts,
         existingSlugs,
@@ -443,6 +473,16 @@ export async function syncProductsFromZoho(): Promise<SyncResult> {
           result.errors.push(`Page ${page} insert error: ${error.message}`);
         } else {
           result.created += toInsert.length;
+        }
+      }
+
+      // Record stock movements from sync
+      if (stockMovements.length > 0) {
+        const { error: moveErr } = await supabase
+          .from("stock_movements")
+          .insert(stockMovements);
+        if (moveErr) {
+          console.error("[Sync] Failed to record stock movements:", moveErr.message);
         }
       }
 
@@ -497,7 +537,7 @@ export async function syncSingleItemFromZoho(zohoItemId: string): Promise<void> 
 
   const { data: existing } = await supabase
     .from("products")
-    .select("id, category_id")
+    .select("id, category_id, stock_quantity")
     .eq("zoho_item_id", zohoItemId)
     .maybeSingle();
 
@@ -525,6 +565,22 @@ export async function syncSingleItemFromZoho(zohoItemId: string): Promise<void> 
       .from("products")
       .update(updatePayload)
       .eq("id", existing.id);
+
+    // Record stock movement if quantity changed
+    const oldQty = existing.stock_quantity;
+    const newQty = productData.stock_quantity;
+    if (oldQty !== newQty) {
+      await supabase.from("stock_movements").insert({
+        product_id: existing.id,
+        movement_type: "sync_zoho",
+        quantity_change: newQty - oldQty,
+        quantity_before: oldQty,
+        quantity_after: newQty,
+        reference: zohoItemId,
+        notes: `Zoho webhook sync: ${oldQty} → ${newQty}`,
+        created_by: null,
+      });
+    }
   } else {
     const categoryId = await resolveCategory(item, categoryMap, supabase);
     const slug = generateSlug(item.name, item.item_id);

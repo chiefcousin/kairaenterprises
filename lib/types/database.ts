@@ -27,6 +27,8 @@ export interface Product {
   video_url: string | null;
   created_at: string;
   updated_at: string;
+  cost_price: number;
+  low_stock_threshold: number;
   // Zoho Inventory integration
   zoho_item_id: string | null;
   last_synced_from_zoho: string | null;
@@ -101,6 +103,43 @@ export interface ProductReview {
   is_approved: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export type StockMovementType =
+  | 'purchase'
+  | 'sale'
+  | 'adjustment'
+  | 'return'
+  | 'damage'
+  | 'sync_zoho'
+  | 'sync_local'
+  | 'initial';
+
+export interface StockMovement {
+  id: string;
+  product_id: string;
+  movement_type: StockMovementType;
+  quantity_change: number;
+  quantity_before: number;
+  quantity_after: number;
+  reference: string | null;
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface StockMovementWithProduct extends StockMovement {
+  product_name: string;
+  product_sku: string | null;
+}
+
+export interface InventorySummary {
+  total_products: number;
+  total_stock_value: number;
+  total_cost_value: number;
+  low_stock_count: number;
+  out_of_stock_count: number;
+  total_units: number;
 }
 
 // Extended types with joins

@@ -55,8 +55,45 @@ export async function PATCH(
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
-  // Push to Zoho when status changes to "confirmed"
+  // Record stock movement and push to Zoho when status changes to "confirmed"
   if (body.status === "confirmed") {
+    // Decrement local stock and record movement
+    try {
+      const { data: orderForStock } = await adminSupabase
+        .from("whatsapp_orders")
+        .select("product_id, product_name, quantity")
+        .eq("id", orderId)
+        .single();
+
+      if (orderForStock?.product_id) {
+        const { data: prod } = await adminSupabase
+          .from("products")
+          .select("stock_quantity")
+          .eq("id", orderForStock.product_id)
+          .single();
+
+        if (prod) {
+          const newQty = Math.max(0, prod.stock_quantity - orderForStock.quantity);
+          await adminSupabase
+            .from("products")
+            .update({ stock_quantity: newQty })
+            .eq("id", orderForStock.product_id);
+
+          await adminSupabase.from("stock_movements").insert({
+            product_id: orderForStock.product_id,
+            movement_type: "sale",
+            quantity_change: -orderForStock.quantity,
+            quantity_before: prod.stock_quantity,
+            quantity_after: newQty,
+            reference: orderId,
+            notes: `Order confirmed: ${orderForStock.product_name}`,
+            created_by: user.id,
+          });
+        }
+      }
+    } catch (stockErr) {
+      console.error("[Inventory] Failed to record sale movement:", stockErr);
+    }
     try {
       const connected = await isZohoConnected();
       if (connected) {
